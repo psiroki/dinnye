@@ -1,0 +1,6 @@
+# IDE independent repo
+.vscode
+*.code-workspace
+web/*.wasm
+web/?.png
+build

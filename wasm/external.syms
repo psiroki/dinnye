@@ -1,0 +1,6 @@
+setMemorySize
+dumpInt
+dumpScore
+phase
+dumpQuadInt
+reportProgress
