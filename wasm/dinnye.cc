@@ -1,6 +1,7 @@
 #include <stdint.h>
 
-static const float worldSize = 16;
+static const float worldSizeX = 12;
+static const float worldSizeY = 16;
 
 extern "C" unsigned char __heap_base;
 extern "C" uint32_t setMemorySize(uint32_t newSize);
@@ -125,6 +126,31 @@ static float seedToFloat(uint64_t seed) {
   return (seed & 0xffffff) / static_cast<float>(0xffffff);
 }
 
+namespace {
+  class Random {
+    uint64_t seed;
+  public:
+    Random(uint64_t seed): seed(nextSeed(seed)) {}
+
+    uint64_t operator()() {
+      return seed = nextSeed(seed);
+    }
+
+    uint64_t operator()(int n) {
+      return (seed = nextSeed(seed)) % n;
+    }
+
+    float fraction() {
+      return seedToFloat(seed = nextSeed(seed));
+    }
+  };
+}
+
+float radii[11];
+const int numRadii = sizeof(radii) / sizeof(*radii);
+const int maxRandomRadii = numRadii / 2;
+const float angleScale = 32768.0f / 3.141592653589793f;
+
 struct Point {
   float x, y;
 
@@ -156,48 +182,96 @@ struct Point {
     y *= scale;
     return *this;
   }
+
+  float operator ^(const Point &other) const {
+    return x * other.y - y * other.x;
+  }
+
+  float lengthSquared() const {
+    return x * x + y * y;
+  }
 };
 
 struct CustomFruit {
   Point pos;
   Point lastPos;
   float r, r2;
+  uint32_t rotation, rIndex;
 
   void move() {
     Point diff = pos - lastPos;
     lastPos = pos;
     pos.y += 0.0078125f;
-    diff *= 0.99f;
+    diff *= 0.95f;
     pos += diff;
   }
 
-  void keepDistance(CustomFruit &other) {
+  void roll(const Point &rel, float scale = 1.0f) {
+    Point vel = pos - lastPos;
+    float rs = rsqrt(rel.lengthSquared());
+    float angleVel = (rel ^ vel) * rs / r;
+    rotation += angleVel * angleScale;
+  }
+
+  bool keepDistance(CustomFruit &other) {
     Point diff = other.pos - pos;
     float d2 = diff.x * diff.x + diff.y * diff.y;
-    float rs = r2 + r * other.r + other.r2;
+    float rsum = r + other.r;
+    float rs = rsum * rsum;
     if (d2 < rs) {
       // they overlap: let's just nudge them
-      float dr = rsqrt(d2);
-      float factor = (r + other.r - d2 * dr) * (1.0f / 32.0f);
-      diff *= dr * factor;
-      other.pos += diff;
-      pos -= diff;
+      if (rIndex == other.rIndex && rIndex < numRadii) {
+        ++rIndex;
+        r = radii[rIndex];
+        r2 = r*r;
+        pos = pos + other.pos;
+        pos *= 0.5f;
+        lastPos = pos;
+        return true;
+      } else {
+        float dr = rsqrt(d2);
+        float factor = (r + other.r - d2 * dr) * (1.0f / 32.0f);
+        diff *= dr * factor;
+        other.pos += diff;
+        pos -= diff;
+        roll(diff);
+        other.roll(diff, -1.0f);
+      }
     }
+    return false;
   }
 
   void constrainInside() {
-    if (pos.x < r) pos.x = r;
-    if (pos.x > worldSize - r) pos.x = worldSize - r;
-    if (pos.y < r) pos.y = r;
-    if (pos.y > worldSize - r) pos.y = worldSize - r;
+    float angleOffset = 0.0f;
+    Point diff = pos - lastPos;
+    if (pos.x < r) {
+      pos.x = r;
+      angleOffset += diff.y / r;
+    }
+    if (pos.x > worldSizeX - r) {
+      pos.x = worldSizeX - r;
+      angleOffset -= diff.y / r;
+    }
+    // there is no top
+    // if (pos.y < r) pos.y = r;
+    if (pos.y > worldSizeY - r) {
+      pos.y = worldSizeY - r;
+      angleOffset += diff.x / r;
+    }
+    rotation += angleOffset * angleScale;
   }
 };
 
-CustomFruit fruits[64];
-const int numFruits = sizeof(fruits) / sizeof(*fruits);
+CustomFruit fruits[1024];
+const int fruitCap = sizeof(fruits) / sizeof(*fruits);
+int numFruits = 0;
 
-extern "C" float getWorldSize() {
-  return worldSize;
+extern "C" float getWorldSizeX() {
+  return worldSizeX;
+}
+
+extern "C" float getWorldSizeY() {
+  return worldSizeY;
 }
 
 extern "C" float getNumFruits() {
@@ -205,14 +279,25 @@ extern "C" float getNumFruits() {
 }
 
 extern "C" CustomFruit* init(int worldSeed) {
-  uint64_t seed = nextSeed(worldSeed);
+  Random rand(worldSeed);
+  radii[0] = 1.0f / 8.0f;
+  for (int i = 1; i < numRadii; ++i) {
+    radii[i] = radii[i - 1] * 1.4142135623730951f;
+  }
+  numFruits = 192;
+  if (numFruits > fruitCap) numFruits = fruitCap;
   for (int i = 0; i < numFruits; ++i) {
     CustomFruit &f(fruits[i]);
-    f.pos.x = seedToFloat(seed = nextSeed(seed)) * worldSize;
-    f.pos.y = seedToFloat(seed = nextSeed(seed)) * worldSize;
-    f.lastPos = f.pos;
-    f.r = (((seed = nextSeed(seed)) % 11) + 1) / 8.0f;
+    f.rIndex = rand(maxRandomRadii);
+    f.r = radii[f.rIndex];
     f.r2 = f.r * f.r;
+    f.rotation = rand() & 65535;
+
+    float d = f.r * 2.0f;
+
+    f.pos.x = rand.fraction() * (worldSizeX - d) + f.r;
+    f.pos.y = rand.fraction() * (worldSizeY - d) + f.r;
+    f.lastPos = f.pos;
   }
   return fruits;
 }
@@ -222,11 +307,17 @@ extern "C" CustomFruit* simulate(int frameSeed) {
   for (int i = 0; i < numFruits; ++i) {
     fruits[i].move();
   }
-  for (int iter = 0; iter < 32; ++iter) {
+  for (int iter = 0; iter < 8; ++iter) {
     // apply constraints
     for (int i = 1; i < numFruits; ++i) {
       for (int j = 0; j < i; ++j) {
-        fruits[j].keepDistance(fruits[i]);
+        if (fruits[j].keepDistance(fruits[i])) {
+          if (i < numFruits - 1) {
+            fruits[i] = fruits[numFruits - 1];
+          }
+          --numFruits;
+          --i;
+        }
       }
     }
     for (int i = 0; i < numFruits; ++i) {

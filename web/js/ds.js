@@ -38,19 +38,41 @@ async function startSimulation() {
   memory = instance.exports.memory;
   const init = instance.exports.init;
   const simulate = instance.exports.simulate;
-  const worldSize = instance.exports.getWorldSize();
+  const worldSizeX = instance.exports.getWorldSizeX();
+  const worldSizeY = instance.exports.getWorldSizeY();
   const getNumFruits = instance.exports.getNumFruits;
 
   function drawFruits(addr) {
-    const numFloats = getNumFruits() * 6;
+    const numFloats = getNumFruits() * 8;
+    let dv = new DataView(memory.buffer, addr, numFloats * 4);
     let floats = new Float32Array(memory.buffer, addr, numFloats);
-    ctx.strokeStyle = "white";
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    const scale = 720/worldSize;
-    for (let offset = 0; offset < numFloats; offset += 6) {
+    const scale = 720/Math.max(worldSizeX, worldSizeY);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let offset = 0; offset < numFloats; offset += 8) {
+      let sizeIndex = dv.getUint32(offset*4 + 7*4, true);
+      let rotation = dv.getUint32(offset*4 + 6*4, true) & 65535;
+      ctx.strokeStyle = `hsl(${sizeIndex*30}deg 100% 50%)`;
+      ctx.fillStyle = `hsl(${sizeIndex*30}deg 100% 50%)`;
+      const x = floats[offset]*scale;
+      const y = floats[offset + 1]*scale;
+      const radius = floats[offset + 4]*scale;
+      const fontSize = sizeIndex > 1 ? sizeIndex * 2 + 10 : 0;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation / 32768 * Math.PI);
+      if (fontSize) {
+        let s = (sizeIndex+1).toString();
+        ctx.font = `${fontSize}px sans-serif`;
+        ctx.fillText(s, 0, 0);
+      }
       ctx.beginPath();
-      ctx.arc(floats[offset]*scale, floats[offset + 1]*scale, floats[offset + 4]*scale*0.85, 0, 2 * Math.PI);
+      ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+      ctx.moveTo(0, -fontSize * 0.5);
+      ctx.lineTo(0, -radius);
       ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -61,8 +83,9 @@ async function startSimulation() {
   };
 
   drawFruits(init(Math.random()*Number.MAX_SAFE_INTEGER|0));
+  console.log(new Float32Array(memory.buffer, instance.exports.radii.value, 11));
   frame();
-
+  return instance;
 }
 
 startSimulation();
