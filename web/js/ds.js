@@ -38,25 +38,45 @@ async function startSimulation() {
   memory = instance.exports.memory;
   const init = instance.exports.init;
   const simulate = instance.exports.simulate;
+  const addFruit = instance.exports.addFruit;
+  const previewFruit = instance.exports.previewFruit;
   const worldSizeX = instance.exports.getWorldSizeX();
   const worldSizeY = instance.exports.getWorldSizeY();
+  const scale = 720/Math.max(worldSizeX, worldSizeY);
   const getNumFruits = instance.exports.getNumFruits;
+  const newSeed = () => Math.random()*Number.MAX_SAFE_INTEGER|0;
+
+  const genNext = (x = 0, y = 0) => ({
+    x: x,
+    y: y,
+    size: Math.random()*5|0,
+    seed: 0,
+  });
+  let nextToAdd = genNext();
 
   function drawFruits(addr) {
-    const numFloats = getNumFruits() * 8;
-    let dv = new DataView(memory.buffer, addr, numFloats * 4);
-    let floats = new Float32Array(memory.buffer, addr, numFloats);
+    const numFloatsPerFruit = 11;
+    const numFloats = getNumFruits() * numFloatsPerFruit;
+    const previewFruitAddress = previewFruit(nextToAdd.x, 0, nextToAdd.size, nextToAdd.seed);
+    const addressedBytes = previewFruitAddress
+        ? previewFruitAddress + (numFloatsPerFruit << 2) - addr
+        : numFloats * 4;
+    let dv = new DataView(memory.buffer, addr, addressedBytes);
+    let floats = new Float32Array(memory.buffer, addr, addressedBytes >> 2);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    const scale = 720/Math.max(worldSizeX, worldSizeY);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    for (let offset = 0; offset < numFloats; offset += 8) {
+    const drawFruitAtOffset = offset => {
       let sizeIndex = dv.getUint32(offset*4 + 7*4, true);
       let rotation = dv.getUint32(offset*4 + 6*4, true) & 65535;
       ctx.strokeStyle = `hsl(${sizeIndex*30}deg 100% 50%)`;
       ctx.fillStyle = `hsl(${sizeIndex*30}deg 100% 50%)`;
       const x = floats[offset]*scale;
       const y = floats[offset + 1]*scale;
+      const dx = x-floats[offset + 2]*scale;
+      const dy = y-floats[offset + 3]*scale;
+      const rsx = floats[offset + 8]*scale;
+      const rsy = floats[offset + 9]*scale;
       const radius = floats[offset + 4]*scale;
       const fontSize = sizeIndex > 1 ? sizeIndex * 2 + 10 : 0;
       ctx.save();
@@ -73,18 +93,39 @@ async function startSimulation() {
       ctx.lineTo(0, -radius);
       ctx.stroke();
       ctx.restore();
+    };
+    for (let offset = 0; offset < numFloats; offset += numFloatsPerFruit) {
+      drawFruitAtOffset(offset);
+    }
+    if (previewFruitAddress >= addr) {
+      drawFruitAtOffset((previewFruitAddress - addr) >> 2);
     }
   }
 
   let frame;
   frame = () => {
-    drawFruits(simulate(Math.random()*Number.MAX_SAFE_INTEGER|0));
+    drawFruits(simulate(newSeed()));
     requestAnimationFrame(frame);
   };
 
-  drawFruits(init(Math.random()*Number.MAX_SAFE_INTEGER|0));
+  drawFruits(init(newSeed()));
   console.log(new Float32Array(memory.buffer, instance.exports.radii.value, 11));
   frame();
+  
+  canvas.addEventListener("click", e => {
+    let x = e.clientX / scale
+    let y = e.clientY / scale;
+    addFruit(x, 0, nextToAdd.size, nextToAdd.seed);
+    nextToAdd = genNext(x, y);
+  });
+  canvas.addEventListener("pointermove", e => {
+    if (!e.isPrimary) return;
+    let x = e.clientX / scale
+    let y = e.clientY / scale;
+    nextToAdd.x = x;
+    nextToAdd.y = y;
+  });
+
   return instance;
 }
 
