@@ -52,9 +52,7 @@ struct NextPlacement {
   int radIndex;
   int seed;
 
-  inline void step(FruitSim &sim) {
-    x += xv;
-    xv *= 0.95f;
+  inline void constrainInside(FruitSim &sim) {
     float r = sim.getRadius(radIndex);
     if (x < r) {
       x = r;
@@ -64,6 +62,12 @@ struct NextPlacement {
       x = sim.getWorldWidth() - r;
       if (xv > 0.0f) xv = 0.0f;
     }
+  }
+
+  inline void step(FruitSim &sim) {
+    x += xv;
+    xv *= 0.95f;
+    constrainInside(sim);
   }
 
   inline void reset(FruitSim &sim, int newSeed) {
@@ -132,6 +136,13 @@ int main() {
             break;
         }
         controls[c] = event.type == SDL_KEYDOWN;
+      }
+      if (event.type == SDL_MOUSEMOTION) {
+        next.x = (event.motion.x - offsetX) / zoom;
+        next.constrainInside(sim);
+      }
+      if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
+        controls[Control::EAST] = event.button.state;
       }
     }
 
