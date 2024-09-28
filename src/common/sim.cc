@@ -57,50 +57,50 @@ const float angleScale = 32768.0f / 3.141592653589793f;
 struct Point {
   float x, y;
 
-  Point() { }
-  Point(float x, float y): x(x), y(y) { }
+  inline Point() { }
+  inline Point(float x, float y): x(x), y(y) { }
 
-  void rotate90() {
+  inline void rotate90() {
     float save = x;
     x = y;
     y = -save;
   }
 
-  Point operator -(const Point &other) const {
+  inline Point operator -(const Point &other) const {
     return Point(x - other.x, y - other.y);
   }
 
-  Point operator +(const Point &other) const {
+  inline Point operator +(const Point &other) const {
     return Point(x + other.x, y + other.y);
   }
 
-  Point& operator +=(const Point &other) {
+  inline Point& operator +=(const Point &other) {
     x += other.x;
     y += other.y;
     return *this;
   }
 
-  Point& operator -=(const Point &other) {
+  inline Point& operator -=(const Point &other) {
     x -= other.x;
     y -= other.y;
     return *this;
   }
 
-  Point& operator *=(float scale) {
+  inline Point& operator *=(float scale) {
     x *= scale;
     y *= scale;
     return *this;
   }
 
-  float operator ^(const Point &other) const {
+  inline float operator ^(const Point &other) const {
     return x * other.y - y * other.x;
   }
 
-  float operator *(const Point &other) const {
+  inline float operator *(const Point &other) const {
     return x * other.x + y * other.y;
   }
 
-  float lengthSquared() const {
+  inline float lengthSquared() const {
     return x * x + y * y;
   }
 };
@@ -113,98 +113,103 @@ struct CustomFruit {
   Point relSum;
   uint32_t relCount;
 
-  void move() {
-    Point diff = pos - lastPos;
-    lastPos = pos;
-    pos.y += 0.0078125f;
-    diff *= 0.999f;
-    pos += diff;
-    relSum.x = relSum.y = 0.0f;
-    relCount = 0;
-  }
-
-  void roll() {
-    if (relCount) {
-      Point vel = pos - lastPos;
-      if (vel.lengthSquared() > 1.0e-3f) {
-        Point rel = relSum;
-        rel.rotate90();
-
-        rel *= rsqrt(rel.lengthSquared());
-        float angleVel = (rel * vel) * (1.0f / 3.141592654f);
-        rotation += angleVel * angleScale;
-      }
-    }
-  }
-
-  bool keepDistance(CustomFruit &other) {
-    Point diff = other.pos - pos;
-    float d2 = diff.x * diff.x + diff.y * diff.y;
-    float rsum = r + other.r;
-    float rs = rsum * rsum;
-    if (d2 < rs) {
-      // overlap
-      if (rIndex == other.rIndex && rIndex < numRadii - 1) {
-        // merge them
-        ++rIndex;
-        r = radii[rIndex];
-        r2 = r*r;
-        pos = pos + other.pos;
-        pos *= 0.5f;
-        lastPos = pos;
-        return true;
-      } else {
-        // nudge them
-        float dr = rsqrt(d2);
-        // d2 = d^2 (distance squared)
-        // dr = 1/sqrt(d2)
-        // d = d2*dr = (d2 / sqrt(d2) = sqrt(d2))
-        float factor = (r + other.r - d2 * dr) * (1.0f / 16.0f);
-        diff *= dr * factor;
-        other.pos += diff;
-        pos -= diff;
-
-        // we aren't using diff for anything else, so adjust it
-        // to alter the rotation vector
-        diff *= 4.0f;
-        relSum += diff;
-        ++relCount;
-        other.relSum -= diff;
-        ++other.relCount;
-      }
-    }
-    return false;
-  }
-
-  void constrainInside() {
-    Point diff = pos - lastPos;
-    if (pos.x < r) {
-      pos.x = r;
-      relSum += Point(r, 0.0f);
-      ++relCount;
-    }
-    if (pos.x > worldSizeX - r) {
-      pos.x = worldSizeX - r;
-      relSum += Point(-r, 0.0f);
-      ++relCount;
-    }
-    // there is no top
-    // if (pos.y < r) pos.y = r;
-    if (pos.y > worldSizeY - r) {
-      pos.y = worldSizeY - r;
-      relSum += Point(0.0f, r);
-      ++relCount;
-    }
-  }
+  void move();
+  void roll();
+  bool keepDistance(CustomFruit &other);
+  void constrainInside();
 };
 
-static const int fruitCap = 1024;
+void CustomFruit::move() {
+  Point diff = pos - lastPos;
+  lastPos = pos;
+  pos.y += 0.0078125f;
+  diff *= 0.999f;
+  pos += diff;
+  relSum.x = relSum.y = 0.0f;
+  relCount = 0;
+}
+
+void CustomFruit::roll() {
+  if (relCount) {
+    Point vel = pos - lastPos;
+    if (vel.lengthSquared() > 1.0e-3f) {
+      Point rel = relSum;
+      rel.rotate90();
+
+      rel *= rsqrt(rel.lengthSquared());
+      float angleVel = (rel * vel) * (1.0f / 3.141592654f);
+      rotation += angleVel * angleScale;
+    }
+  }
+}
+
+bool CustomFruit::keepDistance(CustomFruit &other) {
+  Point diff = other.pos - pos;
+  float d2 = diff.x * diff.x + diff.y * diff.y;
+  float rsum = r + other.r;
+  float rs = rsum * rsum;
+  if (d2 < rs) {
+    // overlap
+    if (rIndex == other.rIndex && rIndex < numRadii - 1) {
+      // merge them
+      ++rIndex;
+      r = radii[rIndex];
+      r2 = r*r;
+      pos = pos + other.pos;
+      pos *= 0.5f;
+      lastPos = pos;
+      return true;
+    } else {
+      // nudge them
+      float dr = rsqrt(d2);
+      // d2 = d^2 (distance squared)
+      // dr = 1/sqrt(d2)
+      // d = d2*dr = (d2 / sqrt(d2) = sqrt(d2))
+      float factor = (r + other.r - d2 * dr) * (1.0f / 16.0f);
+      diff *= dr * factor;
+      other.pos += diff;
+      pos -= diff;
+
+      // we aren't using diff for anything else, so adjust it
+      // to alter the rotation vector
+      diff *= 4.0f;
+      relSum += diff;
+      ++relCount;
+      other.relSum -= diff;
+      ++other.relCount;
+    }
+  }
+  return false;
+}
+
+void CustomFruit::constrainInside() {
+  Point diff = pos - lastPos;
+  if (pos.x < r) {
+    pos.x = r;
+    relSum += Point(r, 0.0f);
+    ++relCount;
+  }
+  if (pos.x > worldSizeX - r) {
+    pos.x = worldSizeX - r;
+    relSum += Point(-r, 0.0f);
+    ++relCount;
+  }
+  // there is no top
+  // if (pos.y < r) pos.y = r;
+  if (pos.y > worldSizeY - r) {
+    pos.y = worldSizeY - r;
+    relSum += Point(0.0f, r);
+    ++relCount;
+  }
+}
+
+const int fruitCap = 1024;
 
 class FruitSim {
   CustomFruit fruits[fruitCap];
   int numFruits;
 public:
-  FruitSim() { }
+  inline FruitSim() { }
 
   inline int getNumFruits() {
     return numFruits;
