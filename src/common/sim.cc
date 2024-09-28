@@ -117,7 +117,7 @@ struct CustomFruit {
     Point diff = pos - lastPos;
     lastPos = pos;
     pos.y += 0.0078125f;
-    diff *= 0.95f;
+    diff *= 0.999f;
     pos += diff;
     relSum.x = relSum.y = 0.0f;
     relCount = 0;
@@ -144,7 +144,7 @@ struct CustomFruit {
     float rs = rsum * rsum;
     if (d2 < rs) {
       // overlap
-      if (rIndex == other.rIndex && rIndex < numRadii) {
+      if (rIndex == other.rIndex && rIndex < numRadii - 1) {
         // merge them
         ++rIndex;
         r = radii[rIndex];
@@ -156,7 +156,10 @@ struct CustomFruit {
       } else {
         // nudge them
         float dr = rsqrt(d2);
-        float factor = (r + other.r - d2 * dr) * (1.0f / 32.0f);
+        // d2 = d^2 (distance squared)
+        // dr = 1/sqrt(d2)
+        // d = d2*dr = (d2 / sqrt(d2) = sqrt(d2))
+        float factor = (r + other.r - d2 * dr) * (1.0f / 16.0f);
         diff *= dr * factor;
         other.pos += diff;
         pos -= diff;
@@ -221,11 +224,14 @@ public:
 
 CustomFruit* FruitSim::init(int worldSeed) {
   Random rand(worldSeed);
-  radii[0] = 1.0f / 8.0f;
+  radii[0] = 1.0f / 3.0f;
   for (int i = 1; i < numRadii; ++i) {
-    radii[i] = radii[i - 1] * 1.4142135623730951f;
+    float fac = i / static_cast<float>(numRadii - 1);
+    float lin = i + 1;
+    float exp = radii[i - 1] * 1.2968395546510096f;
+    radii[i] = exp;
   }
-  numFruits = 192;
+  numFruits = 128;
   if (numFruits > fruitCap) numFruits = fruitCap;
   for (int i = 0; i < numFruits; ++i) {
     CustomFruit &f(fruits[i]);

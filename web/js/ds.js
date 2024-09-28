@@ -113,15 +113,15 @@ async function startSimulation() {
   frame();
   
   canvas.addEventListener("click", e => {
-    let x = e.clientX / scale
-    let y = e.clientY / scale;
+    let x = (e.clientX + Math.random() - 0.5) / scale;
+    let y = (e.clientY + Math.random() - 0.5) / scale;
     addFruit(x, 0, nextToAdd.size, nextToAdd.seed);
     nextToAdd = genNext(x, y);
   });
   canvas.addEventListener("pointermove", e => {
     if (!e.isPrimary) return;
-    let x = e.clientX / scale
-    let y = e.clientY / scale;
+    let x = (e.clientX + Math.random() - 0.5) / scale;
+    let y = (e.clientY + Math.random() - 0.5) / scale;
     nextToAdd.x = x;
     nextToAdd.y = y;
   });
