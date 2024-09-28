@@ -49,8 +49,7 @@ namespace {
   };
 }
 
-float radii[11];
-const int numRadii = sizeof(radii) / sizeof(*radii);
+float radii[numRadii];
 const int numRandomRadii = numRadii / 2;
 const float angleScale = 32768.0f / 3.141592653589793f;
 
@@ -100,10 +99,10 @@ bool Fruit::keepDistance(Fruit &other) {
       // d2 = d^2 (distance squared)
       // dr = 1/sqrt(d2)
       // d = d2*dr = (d2 / sqrt(d2) = sqrt(d2))
-      float factor = (r + other.r - d2 * dr) * (1.0f / 16.0f);
-      diff *= dr * factor;
-      other.pos += diff;
-      pos -= diff;
+      float factor = (r + other.r - d2 * dr) * (1.0f / 16.0f) / rsum;
+      diff *= factor;
+      other.pos += diff * r;
+      pos -= diff * other.r;
 
       // we aren't using diff for anything else, so adjust it
       // to alter the rotation vector
@@ -234,3 +233,14 @@ float FruitSim::getWorldHeight() {
   return worldSizeY;
 }
 
+int FruitSim::getNumRadii() {
+  return numRadii;
+}
+
+int FruitSim::getNumRandomRadii() {
+  return numRandomRadii;
+}
+
+float FruitSim::getRadius(int index) {
+  return radii[index];
+}

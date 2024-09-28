@@ -49,6 +49,10 @@ struct Point {
     return x * other.x + y * other.y;
   }
 
+  inline Point operator *(float f) const {
+    return Point(f * x, f * y);
+  }
+
   inline float lengthSquared() const {
     return x * x + y * y;
   }
@@ -68,8 +72,8 @@ struct Fruit {
   void constrainInside();
 };
 
-
 const int fruitCap = 1024;
+const int numRadii = 11;
 
 class FruitSim {
   Fruit fruits[fruitCap];
@@ -87,6 +91,9 @@ public:
   Fruit* previewFruit(float x, float y, unsigned radiusIndex, int seed);
   float getWorldWidth();
   float getWorldHeight();
+  int getNumRadii();
+  int getNumRandomRadii();
+  float getRadius(int index);
 };
 
 #ifdef IMPLEMENT_SIM
