@@ -1,7 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "../common/sim.cc"
+#define IMPLEMENT_SIM
+#include "../common/sim.hh"
 
 extern "C" unsigned char __heap_base;
 extern "C" uint32_t setMemorySize(uint32_t newSize);

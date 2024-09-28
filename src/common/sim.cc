@@ -1,4 +1,4 @@
-#include <stdint.h>
+#include "sim.hh"
 
 namespace {
 
@@ -53,71 +53,6 @@ float radii[11];
 const int numRadii = sizeof(radii) / sizeof(*radii);
 const int numRandomRadii = numRadii / 2;
 const float angleScale = 32768.0f / 3.141592653589793f;
-
-struct Point {
-  float x, y;
-
-  inline Point() { }
-  inline Point(float x, float y): x(x), y(y) { }
-
-  inline void rotate90() {
-    float save = x;
-    x = y;
-    y = -save;
-  }
-
-  inline Point operator -(const Point &other) const {
-    return Point(x - other.x, y - other.y);
-  }
-
-  inline Point operator +(const Point &other) const {
-    return Point(x + other.x, y + other.y);
-  }
-
-  inline Point& operator +=(const Point &other) {
-    x += other.x;
-    y += other.y;
-    return *this;
-  }
-
-  inline Point& operator -=(const Point &other) {
-    x -= other.x;
-    y -= other.y;
-    return *this;
-  }
-
-  inline Point& operator *=(float scale) {
-    x *= scale;
-    y *= scale;
-    return *this;
-  }
-
-  inline float operator ^(const Point &other) const {
-    return x * other.y - y * other.x;
-  }
-
-  inline float operator *(const Point &other) const {
-    return x * other.x + y * other.y;
-  }
-
-  inline float lengthSquared() const {
-    return x * x + y * y;
-  }
-};
-
-struct Fruit {
-  Point pos;
-  Point lastPos;
-  float r, r2;
-  uint32_t rotation, rIndex;
-  Point relSum;
-  uint32_t relCount;
-
-  void move();
-  void roll();
-  bool keepDistance(Fruit &other);
-  void constrainInside();
-};
 
 void Fruit::move() {
   Point diff = pos - lastPos;
@@ -202,30 +137,6 @@ void Fruit::constrainInside() {
     ++relCount;
   }
 }
-
-const int fruitCap = 1024;
-
-class FruitSim {
-  Fruit fruits[fruitCap];
-  int numFruits;
-public:
-  inline FruitSim() { }
-
-  inline int getNumFruits() {
-    return numFruits;
-  }
-
-  Fruit* init(int worldSeed);
-  Fruit* simulate(int frameSeed);
-  bool addFruit(float x, float y, unsigned radiusIndex, int seed);
-  Fruit* previewFruit(float x, float y, unsigned radiusIndex, int seed);
-  inline float getWorldWidth() {
-    return worldSizeX;
-  }
-  inline float getWorldHeight() {
-    return worldSizeY;
-  }
-};
 
 Fruit* FruitSim::init(int worldSeed) {
   Random rand(worldSeed);
@@ -314,3 +225,12 @@ Fruit* FruitSim::previewFruit(float x, float y, unsigned radiusIndex, int seed) 
   numFruits = numFruitsBefore;
   return result;
 }
+
+float FruitSim::getWorldWidth() {
+  return worldSizeX;
+}
+
+float FruitSim::getWorldHeight() {
+  return worldSizeY;
+}
+

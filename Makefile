@@ -12,7 +12,7 @@ all: $(WEB_DIR)/$(TARGET).wasm
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BUILD_DIR)/$(TARGET).wasm: $(BUILD_DIR) $(SRC_DIR)/$(TARGET).cc $(COMMON_SRC_DIR)/sim.cc
+$(BUILD_DIR)/$(TARGET).wasm: $(BUILD_DIR) $(SRC_DIR)/$(TARGET).cc $(COMMON_SRC_DIR)/sim.cc $(COMMON_SRC_DIR)/sim.hh
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRC_DIR)/$(TARGET).cc
 
 $(WEB_DIR)/$(TARGET).wasm: $(BUILD_DIR)/$(TARGET).wasm
