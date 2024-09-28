@@ -105,7 +105,7 @@ struct Point {
   }
 };
 
-struct CustomFruit {
+struct Fruit {
   Point pos;
   Point lastPos;
   float r, r2;
@@ -115,11 +115,11 @@ struct CustomFruit {
 
   void move();
   void roll();
-  bool keepDistance(CustomFruit &other);
+  bool keepDistance(Fruit &other);
   void constrainInside();
 };
 
-void CustomFruit::move() {
+void Fruit::move() {
   Point diff = pos - lastPos;
   lastPos = pos;
   pos.y += 0.0078125f;
@@ -129,7 +129,7 @@ void CustomFruit::move() {
   relCount = 0;
 }
 
-void CustomFruit::roll() {
+void Fruit::roll() {
   if (relCount) {
     Point vel = pos - lastPos;
     if (vel.lengthSquared() > 1.0e-3f) {
@@ -143,7 +143,7 @@ void CustomFruit::roll() {
   }
 }
 
-bool CustomFruit::keepDistance(CustomFruit &other) {
+bool Fruit::keepDistance(Fruit &other) {
   Point diff = other.pos - pos;
   float d2 = diff.x * diff.x + diff.y * diff.y;
   float rsum = r + other.r;
@@ -182,7 +182,7 @@ bool CustomFruit::keepDistance(CustomFruit &other) {
   return false;
 }
 
-void CustomFruit::constrainInside() {
+void Fruit::constrainInside() {
   Point diff = pos - lastPos;
   if (pos.x < r) {
     pos.x = r;
@@ -206,7 +206,7 @@ void CustomFruit::constrainInside() {
 const int fruitCap = 1024;
 
 class FruitSim {
-  CustomFruit fruits[fruitCap];
+  Fruit fruits[fruitCap];
   int numFruits;
 public:
   inline FruitSim() { }
@@ -215,10 +215,10 @@ public:
     return numFruits;
   }
 
-  CustomFruit* init(int worldSeed);
-  CustomFruit* simulate(int frameSeed);
+  Fruit* init(int worldSeed);
+  Fruit* simulate(int frameSeed);
   bool addFruit(float x, float y, unsigned radiusIndex, int seed);
-  CustomFruit* previewFruit(float x, float y, unsigned radiusIndex, int seed);
+  Fruit* previewFruit(float x, float y, unsigned radiusIndex, int seed);
   inline float getWorldWidth() {
     return worldSizeX;
   }
@@ -227,7 +227,7 @@ public:
   }
 };
 
-CustomFruit* FruitSim::init(int worldSeed) {
+Fruit* FruitSim::init(int worldSeed) {
   Random rand(worldSeed);
   radii[0] = 1.0f / 3.0f;
   for (int i = 1; i < numRadii; ++i) {
@@ -239,7 +239,7 @@ CustomFruit* FruitSim::init(int worldSeed) {
   numFruits = 128;
   if (numFruits > fruitCap) numFruits = fruitCap;
   for (int i = 0; i < numFruits; ++i) {
-    CustomFruit &f(fruits[i]);
+    Fruit &f(fruits[i]);
     f.rIndex = rand(numRandomRadii);
     f.r = radii[f.rIndex];
     f.r2 = f.r * f.r;
@@ -255,7 +255,7 @@ CustomFruit* FruitSim::init(int worldSeed) {
   return fruits;
 }
 
-CustomFruit* FruitSim::simulate(int frameSeed) {
+Fruit* FruitSim::simulate(int frameSeed) {
   // apply gravity and movement
   for (int i = 0; i < numFruits; ++i) {
     fruits[i].move();
@@ -288,7 +288,7 @@ bool FruitSim::addFruit(float x, float y, unsigned radiusIndex, int seed) {
   if (numFruits >= fruitCap) return false;
   if (radiusIndex >= numRadii) radiusIndex = numRadii - 1;
   int index = numFruits++;
-  CustomFruit &f(fruits[index]);
+  Fruit &f(fruits[index]);
   f.rIndex = radiusIndex;
   f.r = radii[f.rIndex];
   f.r2 = f.r * f.r;
@@ -306,9 +306,9 @@ bool FruitSim::addFruit(float x, float y, unsigned radiusIndex, int seed) {
   return true;
 }
 
-CustomFruit* FruitSim::previewFruit(float x, float y, unsigned radiusIndex, int seed) {
+Fruit* FruitSim::previewFruit(float x, float y, unsigned radiusIndex, int seed) {
   int numFruitsBefore = numFruits;
-  CustomFruit *result = nullptr;
+  Fruit *result = nullptr;
   if (addFruit(x, y, radiusIndex, seed))
     result = fruits + (numFruits - 1);
   numFruits = numFruitsBefore;

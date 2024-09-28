@@ -121,14 +121,14 @@ void* operator new(size_t size) {
     return allocator.allocateBytes(size);
 }
 
-extern "C" CustomFruit* init(int worldSeed) {
+extern "C" Fruit* init(int worldSeed) {
   if (!sim) {
     sim = new FruitSim();
   }
   return sim->init(worldSeed);
 }
 
-extern "C" CustomFruit* simulate(int frameSeed) {
+extern "C" Fruit* simulate(int frameSeed) {
   return sim->simulate(frameSeed);
 }
 
@@ -136,6 +136,6 @@ extern "C" bool addFruit(float x, float y, unsigned radiusIndex, int seed) {
   return sim->addFruit(x, y, radiusIndex, seed);
 }
 
-extern "C" CustomFruit* previewFruit(float x, float y, unsigned radiusIndex, int seed) {
+extern "C" Fruit* previewFruit(float x, float y, unsigned radiusIndex, int seed) {
   return sim->previewFruit(x, y, radiusIndex, seed);
 }
