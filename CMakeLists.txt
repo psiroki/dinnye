@@ -10,6 +10,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Find the SDL1 library
 find_package(SDL REQUIRED)
 
+option(FIXED "Use fixed point math" OFF)
+
+if(FIXED)
+  message(STATUS "Fixed point math mode")
+  add_definitions(-DFIXED)
+endif()
+
 # Define directories containing source code
 set(SRC_COMMON_DIR src/common)
 set(SRC_NATIVE_DIR src/native)

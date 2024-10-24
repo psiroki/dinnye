@@ -2,9 +2,27 @@
 
 namespace {
 
-  const float worldSizeX = 12;
-  const float worldSizeY = 16;
+  const Scalar worldSizeX = 12;
+  const Scalar worldSizeY = 16;
 
+#ifdef FIXED
+  Fixed rsqrt(Fixed f) {
+    uint32_t n = f.f;
+    int bits = 32 - __builtin_clz(n);
+    int newBits = 16-((bits-16) >> 1);
+    uint32_t y = ((n-(1 << bits-1))>>1)+((bits&1^1) << bits-1);
+    y ^= (1 << (bits - 1)) - 1;
+    if (newBits > bits) {
+      y <<= newBits - bits;
+    } else if (newBits < bits) {
+      y >>= bits - newBits;
+    }
+    y += (1 << newBits);
+    y -= 0x4dbfab13 >> (31-newBits);
+    Fixed result = Fixed::fromRaw(y);
+    return result * (3 - f*result*result) >> 1;
+  }
+#else
   float rsqrt(float number)
   {
     long i;
@@ -21,6 +39,7 @@ namespace {
 
     return y;
   }
+#endif
 
   static uint64_t nextSeed(uint64_t seed) {
     return (seed * 0x5DEECE66DLL + 0xBLL) & ((1LL << 48) - 1);
@@ -66,12 +85,12 @@ void Fruit::move() {
 void Fruit::roll() {
   if (relCount) {
     Point vel = pos - lastPos;
-    if (vel.lengthSquared() > 1.0e-3f) {
+    if (vel.lengthSquared() > Scalar(1.0e-3f)) {
       Point rel = relSum;
       rel.rotate90();
 
       rel *= rsqrt(rel.lengthSquared());
-      float angleVel = (rel * vel) * (1.0f / 3.141592654f);
+      Scalar angleVel = (rel * vel) * (1.0f / 3.141592654f);
       rotation += angleVel * angleScale;
     }
   }
@@ -79,9 +98,9 @@ void Fruit::roll() {
 
 bool Fruit::keepDistance(Fruit &other) {
   Point diff = other.pos - pos;
-  float d2 = diff.x * diff.x + diff.y * diff.y;
-  float rsum = r + other.r;
-  float rs = rsum * rsum;
+  Scalar d2 = diff.x * diff.x + diff.y * diff.y;
+  Scalar rsum = r + other.r;
+  Scalar rs = rsum * rsum;
   if (d2 < rs) {
     // overlap
     if (rIndex == other.rIndex && rIndex < numRadii - 1) {
@@ -95,11 +114,11 @@ bool Fruit::keepDistance(Fruit &other) {
       return true;
     } else {
       // nudge them
-      float dr = rsqrt(d2);
+      Scalar dr = rsqrt(d2);
       // d2 = d^2 (distance squared)
       // dr = 1/sqrt(d2)
       // d = d2*dr = (d2 / sqrt(d2) = sqrt(d2))
-      float factor = (r + other.r - d2 * dr) * (1.0f / 16.0f) / rsum;
+      Scalar factor = (r + other.r - d2 * dr) * (1.0f / 16.0f) / rsum;
       diff *= factor;
       other.pos += diff * r;
       pos -= diff * other.r;
@@ -193,7 +212,7 @@ Fruit* FruitSim::simulate(int frameSeed) {
   return fruits;
 }
 
-bool FruitSim::addFruit(float x, float y, unsigned radiusIndex, int seed) {
+bool FruitSim::addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {
   Random rand(seed);
   if (numFruits >= fruitCap) return false;
   if (radiusIndex >= numRadii) radiusIndex = numRadii - 1;
@@ -216,7 +235,7 @@ bool FruitSim::addFruit(float x, float y, unsigned radiusIndex, int seed) {
   return true;
 }
 
-Fruit* FruitSim::previewFruit(float x, float y, unsigned radiusIndex, int seed) {
+Fruit* FruitSim::previewFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {
   int numFruitsBefore = numFruits;
   Fruit *result = nullptr;
   if (addFruit(x, y, radiusIndex, seed))
@@ -225,11 +244,11 @@ Fruit* FruitSim::previewFruit(float x, float y, unsigned radiusIndex, int seed) 
   return result;
 }
 
-float FruitSim::getWorldWidth() {
+Scalar FruitSim::getWorldWidth() {
   return worldSizeX;
 }
 
-float FruitSim::getWorldHeight() {
+Scalar FruitSim::getWorldHeight() {
   return worldSizeY;
 }
 
@@ -241,6 +260,6 @@ int FruitSim::getNumRandomRadii() {
   return numRandomRadii;
 }
 
-float FruitSim::getRadius(int index) {
+Scalar FruitSim::getRadius(int index) {
   return radii[index];
 }

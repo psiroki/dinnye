@@ -31,13 +31,16 @@ SDL_Surface *initSDL(int width, int height) {
     return nullptr;
   }
 
-  if (width == 0 || height == 0) {
+  bool fullscreen = width == 0 || height == 0;
+  if (fullscreen) {
     const SDL_VideoInfo *videoInfo = SDL_GetVideoInfo();
     width = videoInfo->current_w;
     height = videoInfo->current_h;
   }
 
-  SDL_Surface *screen = SDL_SetVideoMode(width, height, 32, SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN);
+  SDL_Surface *screen = SDL_SetVideoMode(width, height, 32, SDL_HWSURFACE |
+      SDL_DOUBLEBUF |
+      (fullscreen ? SDL_FULLSCREEN : 0));
   if (screen == nullptr) {
     std::cerr << "Failed to set video mode: " << SDL_GetError() << std::endl;
     return nullptr;
@@ -86,7 +89,7 @@ struct NextPlacement {
 };
 
 int main() {
-  SDL_Surface *screen = initSDL(0, 0);
+  SDL_Surface *screen = initSDL(640, 480);
   if (!screen) return 1;
 
   bool running = true;
