@@ -7,6 +7,15 @@ const float pi = M_PI;
 
 #define RED_BLUE_SWAP
 
+#ifdef BITTBOY
+const unsigned TEXTURE_COORD_BITS = 8;
+#else
+const unsigned TEXTURE_COORD_BITS = 9;
+#endif
+
+const unsigned TEXTURE_SIZE = 1 << TEXTURE_COORD_BITS;
+const unsigned TEXTURE_COORD_MASK = TEXTURE_SIZE - 1;
+
 template <typename T> T min(T a, T b) {
   return a < b ? a : b;
 }
@@ -21,12 +30,15 @@ template <typename T> T clamp(T min, T max, T val) {
   return val;
 }
 
-inline uint32_t ablend(uint32_t col, uint8_t alpha) {
-	uint64_t v = 
-		(((col & 0xff000000ULL) << 24) |
+inline uint64_t unpackColor(uint32_t col) {
+  return (((col & 0xff000000ULL) << 24) |
       ((col & 0xff0000ULL) << 16) |
-		((col & 0xff00ULL) << 8) |
-		col & 0xffULL) * alpha;
+      ((col & 0xff00ULL) << 8) |
+      col & 0xffULL);
+}
+
+inline uint32_t ablend(uint32_t col, uint8_t alpha) {
+	uint64_t v = unpackColor(col) * alpha;
 	return ((v >> 32) & 0xff000000u) |
     ((v >> 24) & 0xff0000u) |
 		((v >> 16) & 0xff00u) |
@@ -92,7 +104,7 @@ void renderSphere(PixelBuffer &pb) {
 }
 
 void ShadedSphere::render(PixelBuffer &target, int cx, int cy, int radius, int angle) {
-  float zoom = 256.0f / radius;
+  float zoom = (TEXTURE_SIZE * 0.5f) / radius;
   float rad = angle / 32768.0f * pi;
   int w = 2*radius;
   int h = w;
@@ -103,10 +115,10 @@ void ShadedSphere::render(PixelBuffer &target, int cx, int cy, int radius, int a
   // The matrix is:
   // cv -sv
   // sv  cv
-  int u = -w * (cv >> 1) - -h * (sv >> 1) + (256 << 16);
-  int v = -w * (sv >> 1) + -h * (cv >> 1) + (256 << 16);
-  int s = -w * (zv >> 1) + (256 << 16);
-  int t = -h * (zv >> 1) + (256 << 16);
+  int u = -w * (cv >> 1) - -h * (sv >> 1) + (TEXTURE_SIZE << 15);
+  int v = -w * (sv >> 1) + -h * (cv >> 1) + (TEXTURE_SIZE << 15);
+  int s = -w * (zv >> 1) + (TEXTURE_SIZE << 15);
+  int t = -h * (zv >> 1) + (TEXTURE_SIZE << 15);
   uint32_t *d = target.pixels +
       (cx - radius) + p*(cy - radius);
   uint32_t *a = albedo.pixels;
@@ -115,13 +127,13 @@ void ShadedSphere::render(PixelBuffer &target, int cx, int cy, int radius, int a
     int lu = u;
     int lv = v;
     int ls = s;
-    int rt = (t >> 16) & 511;
+    int rt = (t >> 16) & TEXTURE_COORD_MASK;
     for (int x = 0; x <= w; ++x) {
-      int ru = (lu >> 16) & 511;
-      int rv = (lv >> 16) & 511;
-      int rs = (ls >> 16) & 511;
-      int m = lm[rs + (rt << 9)] & 0xff;
-      d[x] = m ? ablend(a[ru + (rv << 9)], m) | 0xff000000u : 0;
+      int ru = (lu >> 16) & TEXTURE_COORD_MASK;
+      int rv = (lv >> 16) & TEXTURE_COORD_MASK;
+      int rs = (ls >> 16) & TEXTURE_COORD_MASK;
+      int m = lm[rs + (rt << TEXTURE_COORD_BITS)] & 0xff;
+      d[x] = m ? ablend(a[ru + (rv << TEXTURE_COORD_BITS)], m) | 0xff000000u : 0;
       lu += cv;
       lv += sv;
       ls += zv;
@@ -221,10 +233,64 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
     }
     SDL_UnlockSurface(textures[i]);
 #endif
+    if (textures[i]->w > TEXTURE_SIZE) {
+      SDL_LockSurface(textures[i]);
+      PixelBuffer t(textures[i]);
+      SDL_Surface *surface = SDL_CreateRGBSurface(
+            SDL_SWSURFACE,
+            TEXTURE_SIZE, // Width of the image
+            TEXTURE_SIZE, // Height of the image
+            32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
+            0x000000ff, // Red mask
+            0x0000ff00, // Green mask
+            0x00ff0000, // Blue mask
+            0xff000000  // Alpha mask
+          );
+      SDL_LockSurface(surface);
+      PixelBuffer target(surface);
+      for (int y = 0; y < TEXTURE_SIZE; ++y) {
+        int sy = y * t.height / TEXTURE_SIZE;
+
+        const uint32_t *src = t.pixels + t.pitch * sy;
+        uint32_t *dst = target.pixels + target.pitch * y;
+        int linesToSum = (y+1) * t.height / TEXTURE_SIZE - sy;
+
+        int sxn = 0;
+        for (int x = 0; x < TEXTURE_SIZE; ++x) {
+          uint64_t sum = 0;
+
+          int sx = sxn / TEXTURE_SIZE;
+          sxn += t.width;
+          int colsToSum = sxn / TEXTURE_SIZE - sx;
+
+          const uint32_t *srcLine = src + sx;
+
+          for (int v = 0; v < linesToSum; ++v) {
+            for (int u = 0; u < colsToSum; ++u) {
+              sum += unpackColor(srcLine[u]);
+            }
+            srcLine += t.pitch;
+          }
+
+          uint32_t col = 0;
+          uint32_t count = linesToSum * colsToSum;
+          for (int i = 0; i < 4; ++i) {
+            int ch = sum & 0xffff;
+            col |= (ch / count) << (i * 8);
+            sum >>= 16;
+          }
+          dst[x] = col;
+        }
+      }
+      SDL_UnlockSurface(surface);
+      SDL_UnlockSurface(textures[i]);
+      SDL_FreeSurface(textures[i]);
+      textures[i] = surface;
+    }
   }
 
-  shading = new uint32_t[512*512];
-  PixelBuffer pb(512, 512, 512, shading);
+  shading = new uint32_t[TEXTURE_SIZE*TEXTURE_SIZE];
+  PixelBuffer pb(TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, shading);
   renderSphere(pb);
 
   sphereDefs = new ShadedSphere[numTextures];

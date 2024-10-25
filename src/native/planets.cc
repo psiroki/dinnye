@@ -89,7 +89,13 @@ struct NextPlacement {
 };
 
 int main() {
+#ifdef BITTBOY
+#pragma message "BittBoy build"
+  SDL_Surface *screen = initSDL(320, 240);
+  SDL_ShowCursor(false);
+#else
   SDL_Surface *screen = initSDL(640, 480);
+#endif
   if (!screen) return 1;
 
   bool running = true;
@@ -135,7 +141,7 @@ int main() {
             c = Control::EAST;
             break;
           case SDLK_RETURN:
-            c = Control::SOUTH;
+            c = Control::START;
             break;
         }
         controls[c] = event.type == SDL_KEYDOWN;

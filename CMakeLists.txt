@@ -10,11 +10,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Find the SDL1 library
 find_package(SDL REQUIRED)
 
-option(FIXED "Use fixed point math" OFF)
+option(BITTBOY "Target Bittboy" OFF)
+option(FIXED "Use fixed point math" ${BITTBOY})
 
 if(FIXED)
   message(STATUS "Fixed point math mode")
   add_definitions(-DFIXED)
+endif()
+
+if(BITTBOY)
+  message(STATUS "Building for BittBoy")
+  add_definitions(-DBITTBOY)
 endif()
 
 # Define directories containing source code

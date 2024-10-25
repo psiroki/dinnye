@@ -4,3 +4,5 @@
 web/*.wasm
 web/?.png
 build
+
+platforms/platforms.txt
