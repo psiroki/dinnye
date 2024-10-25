@@ -23,17 +23,21 @@ if(BITTBOY)
   add_definitions(-DBITTBOY)
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+endif()
+
 # Define directories containing source code
 set(SRC_COMMON_DIR src/common)
 set(SRC_NATIVE_DIR src/native)
 
 # Collect all .cc source files from src/common and src/native
 file(GLOB COMMON_SOURCES
-    ${SRC_COMMON_DIR}/*.cc
+  ${SRC_COMMON_DIR}/*.cc
 )
 
 file(GLOB NATIVE_SOURCES
-    ${SRC_NATIVE_DIR}/*.cc
+  ${SRC_NATIVE_DIR}/*.cc
 )
 
 # Combine all source files into one list
@@ -41,11 +45,11 @@ set(SOURCES ${COMMON_SOURCES} ${NATIVE_SOURCES})
 
 # Collect all .hh header files (optional, for IDE visibility)
 file(GLOB COMMON_HEADERS
-    ${SRC_COMMON_DIR}/*.hh
+  ${SRC_COMMON_DIR}/*.hh
 )
 
 file(GLOB NATIVE_HEADERS
-    ${SRC_NATIVE_DIR}/*.hh
+  ${SRC_NATIVE_DIR}/*.hh
 )
 
 # Combine all header files into one list

@@ -119,8 +119,14 @@ int main() {
   ControlState controls;
   memset(&controls, 0, sizeof(controls));
   bool placed = false;
+  uint32_t simTime = 0.0f;
+  uint32_t renderTime = 0.0f;
+  uint32_t numFrames = 0;
+
+  std::cout << "Red is shifted " << (int) screen->format->Rshift << std::endl;
 
   while (running) {
+    ++numFrames;
     Timestamp frame;
     // Event handling
     while (SDL_PollEvent(&event)) {
@@ -164,13 +170,16 @@ int main() {
       placed = false;
     }
 
+    Timestamp simStart;
     next.step(sim);
 
     Fruit *fruits = sim.simulate(++seed);
     int count = sim.getNumFruits();
 
     next.setupPreview(sim);
+    simTime += simStart.elapsedSeconds() * 1000000.0f;
 
+    Timestamp renderStart;
     if (background->w < screen->w || background->h < screen->h)
       SDL_FillRect(screen, nullptr, 0);
     SDL_Rect bgPos = {
@@ -181,13 +190,22 @@ int main() {
 
     renderer.renderFruits(fruits, count + 1, zoom, offsetX);
 
+    renderTime += renderStart.elapsedSeconds() * 1000000.0f;
+
     // Update the screen
     SDL_Flip(screen);
 
+#ifndef BITTBOY
     // Cap the frame rate to ~100 FPS
     int millisToWait = 10 - frame.elapsedSeconds()*1000.0f;
     if (millisToWait > 0) SDL_Delay(millisToWait);
+#endif
   }
+  std::cout << "simMicros: " << simTime << std::endl;
+  std::cout << "renderMicros: " << renderTime << std::endl;
+  std::cout << "simMicros avg: " << simTime/numFrames << std::endl;
+  std::cout << "renderMicros avg: " << renderTime/numFrames << std::endl;
+  std::cout << "renderToSim: " << renderTime/static_cast<float>(simTime) << std::endl;
 
   SDL_Quit();
 }

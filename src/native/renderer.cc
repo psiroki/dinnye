@@ -5,10 +5,10 @@
 
 const float pi = M_PI;
 
-#define RED_BLUE_SWAP
+//#define RED_BLUE_SWAP
 
 #ifdef BITTBOY
-const unsigned TEXTURE_COORD_BITS = 8;
+const unsigned TEXTURE_COORD_BITS = 7;
 #else
 const unsigned TEXTURE_COORD_BITS = 9;
 #endif
@@ -156,11 +156,14 @@ void SphereCache::reassign(ShadedSphere *newSphere, int newRadius) {
       newRadius*2+1, // Width of the image
       newRadius*2+1, // Height of the image
       32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
-      0x000000ff, // Red mask
+      0x00ff0000, // Red mask
       0x0000ff00, // Green mask
-      0x00ff0000, // Blue mask
+      0x000000ff, // Blue mask
       0xff000000  // Alpha mask
     );
+#ifdef BITTBOY
+    SDL_SetColorKey(cache, SDL_SRCCOLORKEY, 0);
+#endif
   }
   angle = 0;
   dirty = true;
