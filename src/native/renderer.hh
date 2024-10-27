@@ -5,6 +5,20 @@
 
 #include "../common/sim.hh"
 
+template <typename T> T min(T a, T b) {
+  return a < b ? a : b;
+}
+
+template <typename T> T max(T a, T b) {
+  return a > b ? a : b;
+}
+
+template <typename T> T clamp(T min, T max, T val) {
+  if (val < min) return min;
+  if (val > max) return max;
+  return val;
+}
+
 struct PixelBuffer {
   /// Pointer to the 32 bit pixels
   uint32_t *pixels;
@@ -79,17 +93,34 @@ public:
 #endif
 };
 
+struct PlanetDefinition {
+  char name[16];
+  SDL_Surface *nameText;
+  // Preview placement
+  int x, y;
+  int w, h;
+};
+
 class FruitRenderer {
   SDL_Surface **textures;
+  PlanetDefinition planetDefs[numRadii];
   int numTextures;
   uint32_t *shading;
   SphereCache spheres[fruitCap + numRadii];
   int numSpheres;
   ShadedSphere *sphereDefs;
   SDL_Surface *target;
+  float zoom;
+  float offsetX;
+  int fontSize;
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
 
-  void renderFruits(Fruit *fruits, int count, float zoom, float offsetX);
+  inline void setLayout(float newZoom, float newOffsetX) {
+    zoom = newZoom;
+    offsetX = newOffsetX;
+  }
+  void renderBackground(SDL_Surface *background);
+  void renderFruits(Fruit *fruits, int count, int selection);
 };

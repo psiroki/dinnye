@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Find the SDL1 library
 find_package(SDL REQUIRED)
+find_package(SDL_ttf REQUIRED)
 
 option(BITTBOY "Target Bittboy" OFF)
 option(FIXED "Use fixed point math" ${BITTBOY})
@@ -68,4 +69,4 @@ include_directories(${SRC_COMMON_DIR} ${SRC_NATIVE_DIR})
 add_executable(planets ${SOURCES} ${HEADERS})
 
 # Link SDL1 and the math library (libm)
-target_link_libraries(planets SDL m)
+target_link_libraries(planets SDL SDL_ttf m)

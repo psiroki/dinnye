@@ -1,7 +1,10 @@
-#include <math.h>
-
 #include "renderer.hh"
+
+#include <math.h>
+#include <SDL/SDL_ttf.h>
+
 #include "image.hh"
+#include "roboto.hh"
 #include "../common/sim.hh"
 
 const float pi = M_PI;
@@ -22,20 +25,6 @@ const unsigned TEXTURE_COORD_BITS = 9;
 
 const unsigned TEXTURE_SIZE = 1 << TEXTURE_COORD_BITS;
 const unsigned TEXTURE_COORD_MASK = TEXTURE_SIZE - 1;
-
-template <typename T> T min(T a, T b) {
-  return a < b ? a : b;
-}
-
-template <typename T> T max(T a, T b) {
-  return a > b ? a : b;
-}
-
-template <typename T> T clamp(T min, T max, T val) {
-  if (val < min) return min;
-  if (val > max) return max;
-  return val;
-}
 
 inline uint64_t unpackColor(uint32_t col) {
   return (((col & 0xff000000ULL) << 24) |
@@ -263,10 +252,13 @@ static const char * const imageNames[] = {
   "assets/uranus.png",
   "assets/saturn.png",
   "assets/jupiter.png",
+  nullptr,
 };
 
 FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0) {
-  numTextures = sizeof(imageNames) / sizeof(*imageNames);
+  ShadedSphere::initTables();
+
+  numTextures = (sizeof(imageNames) / sizeof(*imageNames)) - 1;
   textures = new SDL_Surface*[numTextures];
 
   for (int i = 0; i < numTextures; ++i)
@@ -342,6 +334,33 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
     }
   }
 
+  fontSize = target->h / 25;
+  SDL_RWops *rwops = createRobotoOps();
+  TTF_Font *font = TTF_OpenFontRW(rwops, 1, fontSize);
+  if (font) {
+    for (int i = 0; i < numRadii; ++i) {
+      const char *name = imageNames[i];
+      PlanetDefinition &def(planetDefs[i]);
+      if (!name) {
+        def.nameText = nullptr;
+      } else {
+        const char *start = strrchr(name, '/') + 1;
+        const char *end = strchr(start, '.');
+        int length = end - start;
+        if (length >= sizeof(def.name)) length = sizeof(def.name) - 1;
+        strncpy(def.name, start, length);
+        def.name[length] = 0;
+        def.name[0] &= ~0x20;
+        def.nameText = TTF_RenderText_Blended(font, def.name, SDL_Color{255, 255, 255});
+      }
+    }
+    TTF_CloseFont(font);
+  } else {
+    for (int i = 0; i < numRadii; ++i) {
+      planetDefs[i].nameText = nullptr;
+    }
+  }
+
   shading = new uint32_t[TEXTURE_SIZE*TEXTURE_SIZE];
   PixelBuffer pb(TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, shading);
   renderSphere(pb);
@@ -367,20 +386,48 @@ FruitRenderer::~FruitRenderer() {
   delete[] shading;
 }
 
-void FruitRenderer::renderFruits(Fruit *fruits, int count, float zoom, float offsetX) {
+void FruitRenderer::renderBackground(SDL_Surface *background) {
   // Render gallery
+  int radius = zoom * 7 / 12;
   for (int i = 0; i < numRadii; ++i) {
     SphereCache &sc(spheres[i]);
-    int scale = zoom;
-    int radius = scale * 7 / 12;
-    int availableHeight = target->h - scale;
+    int availableHeight = target->h - zoom;
     int step = (availableHeight - 2*radius) / (numRadii - 1);
-    sc.reassign(sphereDefs + i, scale * 2 / 3);
+    sc.reassign(sphereDefs + i, zoom * 2 / 3);
     SDL_Surface *s = sc.withAngle(0);
+    int x = offsetX - (radius * 9 / 2);
+    int y = i * step + zoom / 2;
     SDL_Rect dst;
-    dst.x = static_cast<Sint16>(offsetX - (radius * 9 / 2));
-    dst.y = static_cast<Sint16>(i * step + scale / 2);
-    SDL_BlitSurface(s, nullptr, target, &dst);
+    dst.x = static_cast<Sint16>(x);
+    dst.y = static_cast<Sint16>(y);
+    SDL_BlitSurface(s, nullptr, background, &dst);
+
+    PlanetDefinition &def(planetDefs[i]);
+    def.x = x;
+    def.y = y;
+    def.w = s->w;
+    def.h = s->h;
+
+    SDL_Surface *text = def.nameText;
+    if (text) {
+      dst.x = static_cast<Sint16>(x - text->w - 8);
+      dst.y = static_cast<Sint16>(y + radius - text->h / 2 + fontSize / 8);
+      SDL_BlitSurface(text, nullptr, background, &dst);
+    }
+  }
+}
+
+void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection) {
+  // Render selection
+  if (selection >= 0 && selection < numRadii) {
+    PlanetDefinition &def(planetDefs[selection]);
+    SDL_Rect rect {
+      .x = static_cast<Sint16>(def.x + def.w + 2),
+      .y = static_cast<Sint16>(def.y + def.h / 8),
+      .w = 4,
+      .h = static_cast<Uint16>(def.h * 6 / 8),
+    };
+    SDL_FillRect(target, &rect, 0xFFFFFFFFu);
   }
   // Render playfield
   for (int i = 0; i < count; ++i) {

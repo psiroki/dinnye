@@ -1,12 +1,49 @@
 #include <SDL/SDL.h>
+#include <SDL/SDL_ttf.h>
 #include <iostream>
 #include <time.h>
 #include <string.h>
+
+#ifdef BITTBOY
+#include <sys/sysinfo.h>
+#include <sys/resource.h>
+#include <iomanip>
+#endif
 
 #include "../common/sim.hh"
 #include "renderer.hh"
 #include "util.hh"
 #include "image.hh"
+
+template <typename T, std::size_t N>
+T sumArray(const T (&arr)[N]) {
+  T sum { };
+  for (const auto& elem : arr) {
+    sum += elem;
+  }
+  return sum;
+}
+
+template <typename T, std::size_t N>
+void printPercentile(T sum, int percentile, const char *name, const T (&arr)[N]) {
+  T threshold(sum * percentile / 100);
+  T n { };
+  for (int i = 0; i < N; ++i) {
+    n += arr[i];
+    if (n >= threshold) {
+      std::cout << name << " " << percentile << " percentile millis: " << i << std::endl;
+      return;
+    }
+  }
+  std::cout << name << " " << percentile << " percentile millis: over " << N << std::endl;
+}
+
+template <typename T, std::size_t N>
+void printPercentiles(const char *name, const T (&arr)[N]) {
+  T sum(sumArray(arr));
+  printPercentile(sum, 95, name, arr);
+  printPercentile(sum, 99, name, arr);
+}
 
 enum class Control {
   UNMAPPED, UP, DOWN, LEFT, RIGHT, NORTH, SOUTH, WEST, EAST, R1, L1, R2, L2, START, SELECT, MENU, LAST_ITEM,
@@ -30,6 +67,8 @@ SDL_Surface *initSDL(int width, int height) {
     std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
     return nullptr;
   }
+
+  TTF_Init();
 
   bool fullscreen = width == 0 || height == 0;
   if (fullscreen) {
@@ -98,8 +137,6 @@ int main() {
 #endif
   if (!screen) return 1;
 
-  ShadedSphere::initTables();
-
   bool running = true;
   SDL_Event event;
 
@@ -112,20 +149,37 @@ int main() {
   uint32_t seed = time.tv_nsec;
   sim.init(seed);
 
-  float zoom = screen->h / sim.getWorldHeight();
-  float offsetX = (screen->w - sim.getWorldWidth() * zoom) * 0.5f;
+  const float zoom = screen->h / sim.getWorldHeight();
+  const float rightAligned = screen->w * 0.9875f - sim.getWorldWidth() * zoom;
+  const float centered = (screen->w - sim.getWorldWidth() * zoom) * 0.5f;
+  const float offsetX = rightAligned * 0.75f + centered * 0.25f;
+  renderer.setLayout(zoom, offsetX);
   SDL_Surface *background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
+  SDL_Surface *backgroundScreen = SDL_DisplayFormat(screen);
+  if (background->w < backgroundScreen->w || background->h < backgroundScreen->h)
+    SDL_FillRect(backgroundScreen, nullptr, 0);
+  SDL_Rect bgPos = {
+    .x = static_cast<Sint16>((backgroundScreen->w - background->w) / 2),
+    .y = static_cast<Sint16>((backgroundScreen->h - background->h) / 2),
+  };
+  SDL_BlitSurface(background, nullptr, backgroundScreen, &bgPos);
+  SDL_FreeSurface(background);
+  background = backgroundScreen;
+  SDL_SetAlpha(background, 0, 255);
+  renderer.renderBackground(background);
+
   NextPlacement next = { .x = 0.0f, .xv = 0.0f };
   next.reset(sim, seed);
 
   ControlState controls;
   memset(&controls, 0, sizeof(controls));
   bool placed = false;
-  uint32_t simTime = 0.0f;
-  uint32_t renderTime = 0.0f;
+  uint32_t simTime = 0;
+  uint32_t renderTime = 0;
   uint32_t numFrames = 0;
-
-  std::cout << "Red is shifted " << (int) screen->format->Rshift << std::endl;
+  uint32_t maxSimTime = 0;
+  uint32_t maxRenderTime = 0;
+  uint32_t renderTimeHistogram[32] { }, simTimeHistogram[32] { };
 
   while (running) {
     ++numFrames;
@@ -179,20 +233,20 @@ int main() {
     int count = sim.getNumFruits();
 
     next.setupPreview(sim);
-    simTime += simStart.elapsedSeconds() * 1000000.0f;
+    uint32_t simMicros = simStart.elapsedSeconds() * 1000000.0f;
+    simTime += simMicros;
+    if (simMicros > maxSimTime) maxSimTime = simMicros;
+    ++simTimeHistogram[min(simMicros/1000, 32u)];
 
     Timestamp renderStart;
-    if (background->w < screen->w || background->h < screen->h)
-      SDL_FillRect(screen, nullptr, 0);
-    SDL_Rect bgPos = {
-      .x = static_cast<Sint16>((screen->w - background->w) / 2),
-      .y = static_cast<Sint16>((screen->h - background->h) / 2),
-    };
-    SDL_BlitSurface(background, nullptr, screen, &bgPos);
+    SDL_BlitSurface(background, nullptr, screen, nullptr);
 
-    renderer.renderFruits(fruits, count + 1, zoom, offsetX);
+    renderer.renderFruits(fruits, count + 1, next.radIndex);
 
-    renderTime += renderStart.elapsedSeconds() * 1000000.0f;
+    uint32_t renderMicros = renderStart.elapsedSeconds() * 1000000.0f;
+    renderTime += renderMicros;
+    if (renderMicros > maxRenderTime) maxRenderTime = renderMicros;
+    ++renderTimeHistogram[min(renderMicros/1000, 32u)];
 
     // Update the screen
     SDL_Flip(screen);
@@ -203,15 +257,39 @@ int main() {
     if (millisToWait > 0) SDL_Delay(millisToWait);
 #endif
   }
-  std::cout << "simMicros: " << simTime << std::endl;
-  std::cout << "renderMicros: " << renderTime << std::endl;
+  std::cout << "maxSimMicros: " << maxSimTime << std::endl;
+  std::cout << "maxRenderMicros: " << maxRenderTime << std::endl;
   std::cout << "simMicros avg: " << simTime/numFrames << std::endl;
   std::cout << "renderMicros avg: " << renderTime/numFrames << std::endl;
-  std::cout << "renderToSim: " << renderTime/static_cast<float>(simTime) << std::endl;
+  printPercentiles("sim", simTimeHistogram);
+  printPercentiles("render", renderTimeHistogram);
+
+  std::cout << std::endl;
   std::cout << "sphereCacheMisses: " << SphereCache::numCacheMisses << std::endl;
   std::cout << "sphereCacheAngleMisses: " << SphereCache::numCacheAngleMisses << std::endl;
   std::cout << "sphereCacheReassignMisses: " << SphereCache::numCacheReassignMisses << std::endl;
   std::cout << "sphereCacheHits: " << SphereCache::numCacheHits << std::endl;
+
+#ifdef BITTBOY
+  std::cout << std::endl;
+  struct rusage usage;
+  if (getrusage(RUSAGE_SELF, &usage) == 0) {
+    // Maximum resident set size in kilobytes
+    long maxrss = usage.ru_maxrss;
+    std::cout << "maxRSS: " << maxrss << " kB" << std::endl;
+  }
+  struct sysinfo si;
+  if (sysinfo(&si) == 0) {
+    unsigned long totalRam = si.totalram * si.mem_unit;
+    unsigned long freeRam = si.freeram * si.mem_unit;
+    const double mb = 1024 * 1024;
+    std::cout << std::fixed << std::setprecision(2)
+              << "Memory Statistics:\n"
+              << "Total RAM:      " << (totalRam / mb) << " MB\n"
+              << "Free RAM:       " << (freeRam / mb) << " MB\n"
+              << "Usage:          " << (100.0 * (totalRam - freeRam) / totalRam) << "%" << std::endl;
+  }
+#endif
 
   SDL_Quit();
 }
