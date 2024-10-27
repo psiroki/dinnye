@@ -123,6 +123,10 @@ struct Fixed {
     return fromRaw(f*val);
   }
 
+  Fixed operator/(int val) const {
+    return fromRaw(f/val);
+  }
+
   Fixed operator>>(int val) const {
     return fromRaw(f >> val);
   }

@@ -2,10 +2,17 @@
 
 #include "renderer.hh"
 #include "image.hh"
+#include "../common/sim.hh"
 
 const float pi = M_PI;
 
+// Uncomment this if the red and blue seems to be swapped
 //#define RED_BLUE_SWAP
+
+int SphereCache::numCacheHits = 0;
+int SphereCache::numCacheMisses = 0;
+int SphereCache::numCacheAngleMisses = 0;
+int SphereCache::numCacheReassignMisses = 0;
 
 #ifdef BITTBOY
 const unsigned TEXTURE_COORD_BITS = 7;
@@ -94,24 +101,47 @@ void renderSphere(PixelBuffer &pb) {
       combinedIntensity = combinedIntensity / (combinedIntensity + 1.0f) * 1.41f;
 
       // Calculate the grayscale color value
-      uint32_t gray = min(1.0f, combinedIntensity*mask) * 255;
+      uint32_t gray = min(1.0f, combinedIntensity) * 255;
+      uint32_t alpha = min(255, static_cast<int>(mask * 255));
+      if (alpha == 0) gray = 0;
 
       // Set the pixel color
-      line[x] = 0xff000000u | (gray << 24) | (gray << 16) << (gray << 8) | gray;
+      line[x] = (alpha << 24) | (gray << 16) << (gray << 8) | gray;
     }
     dst += pb.pitch;
   }
 }
 
+namespace {
+#ifdef FIXED
+  Fixed sinLookup[65536];
+#endif
+}
+
+void ShadedSphere::initTables() {
+#ifdef FIXED  
+  for (int i = 0; i < 65536; ++i) {
+    sinLookup[i] = sinf(i / 32768.0f * pi);
+  }
+#endif
+}
+
 void ShadedSphere::render(PixelBuffer &target, int cx, int cy, int radius, int angle) {
+#ifdef FIXED
+  Fixed zoom = Fixed(static_cast<int>(TEXTURE_SIZE >> 1)) / radius;
+  int zv = zoom.f;
+  int cv = (sinLookup[(angle + 16384) & 0xFFFF] * zoom).f;
+  int sv = (sinLookup[angle & 0xFFFF] * zoom).f;
+#else
   float zoom = (TEXTURE_SIZE * 0.5f) / radius;
   float rad = angle / 32768.0f * pi;
-  int w = 2*radius;
-  int h = w;
-  int p = target.pitch;
   int zv = zoom * 65536.0f;
   int cv = cosf(rad) * 65536.0f * zoom;
   int sv = sinf(rad) * 65536.0f * zoom;
+#endif
+  int w = 2*radius;
+  int h = w;
+  int p = target.pitch;
   // The matrix is:
   // cv -sv
   // sv  cv
@@ -132,8 +162,8 @@ void ShadedSphere::render(PixelBuffer &target, int cx, int cy, int radius, int a
       int ru = (lu >> 16) & TEXTURE_COORD_MASK;
       int rv = (lv >> 16) & TEXTURE_COORD_MASK;
       int rs = (ls >> 16) & TEXTURE_COORD_MASK;
-      int m = lm[rs + (rt << TEXTURE_COORD_BITS)] & 0xff;
-      d[x] = m ? ablend(a[ru + (rv << TEXTURE_COORD_BITS)], m) | 0xff000000u : 0;
+      int m = lm[rs + (rt << TEXTURE_COORD_BITS)];
+      d[x] = ablend(a[ru + (rv << TEXTURE_COORD_BITS)], m & 0xff) | (m & 0xff000000u);
       lu += cv;
       lv += sv;
       ls += zv;
@@ -145,8 +175,9 @@ void ShadedSphere::render(PixelBuffer &target, int cx, int cy, int radius, int a
   }
 }
 
-void SphereCache::reassign(ShadedSphere *newSphere, int newRadius) {
-  if (s == newSphere && radius == newRadius) return;
+int SphereCache::reassign(ShadedSphere *newSphere, int newRadius) {
+  if (s == newSphere && radius == newRadius) return 0;
+  int result = 1;
   s = newSphere;
   if (radius != newRadius) {
     radius = newRadius;
@@ -164,9 +195,11 @@ void SphereCache::reassign(ShadedSphere *newSphere, int newRadius) {
 #ifdef BITTBOY
     SDL_SetColorKey(cache, SDL_SRCCOLORKEY, 0);
 #endif
+    result = 2;
   }
-  angle = 0;
   dirty = true;
+  ++numCacheReassignMisses;
+  return result;
 }
 
 void SphereCache::release() {
@@ -183,8 +216,19 @@ SDL_Surface* SphereCache::withAngle(int newAngle) {
     int diff = abs(angle - newAngle);
     if (diff >= 32768) diff = 65535 - diff;
     if (diff > 16) dirty = true;
+    if (dirty) {
+      ++numCacheAngleMisses;
+#ifdef DEBUG_VISUALIZATION
+      invalidationReason = 2;
+#endif
+    }
+  } else {
+#ifdef DEBUG_VISUALIZATION
+    invalidationReason = 1;
+#endif
   }
   if (dirty) {
+    ++numCacheMisses;
     angle = newAngle;
 
     if (SDL_MUSTLOCK(cache)) {
@@ -197,6 +241,12 @@ SDL_Surface* SphereCache::withAngle(int newAngle) {
     if (SDL_MUSTLOCK(cache)) {
       SDL_UnlockSurface(cache);
     }
+    dirty = false;
+  } else {
+#ifdef DEBUG_VISUALIZATION
+    invalidationReason = 0;
+#endif
+    ++numCacheHits;
   }
   return cache;
 }
@@ -320,7 +370,7 @@ FruitRenderer::~FruitRenderer() {
 void FruitRenderer::renderFruits(Fruit *fruits, int count, float zoom, float offsetX) {
   // Render gallery
   for (int i = 0; i < numRadii; ++i) {
-    SphereCache &sc(spheres[i + numRadii]);
+    SphereCache &sc(spheres[i]);
     int scale = zoom;
     int radius = scale * 7 / 12;
     int availableHeight = target->h - scale;
@@ -337,9 +387,20 @@ void FruitRenderer::renderFruits(Fruit *fruits, int count, float zoom, float off
     Fruit &f(fruits[i]);
     SphereCache &sc(spheres[i + numRadii]);
     int radius = f.r * zoom;
-    sc.reassign(sphereDefs + f.rIndex, radius);
+    int reassignResult = sc.reassign(sphereDefs + f.rIndex, radius);
     SDL_Surface *s = sc.withAngle((-f.rotation) & 0xffff);
     SDL_Rect dst;
+#ifdef DEBUG_VISUALIZATION
+    int invReason = sc.getInvalidationReason();
+    if (invReason || reassignResult) {
+      dst.x = static_cast<Sint16>(f.pos.x * zoom - radius + offsetX);
+      dst.y = static_cast<Sint16>(f.pos.y * zoom - radius);
+      dst.h = dst.w = radius << 1;
+      uint32_t color = invReason * 0x7F | reassignResult * 0x7F00 | 0xFF000000u;
+      SDL_FillRect(target, &dst, color);
+      memset(&dst, 0, sizeof(dst));
+    }
+#endif
     dst.x = static_cast<Sint16>(f.pos.x * zoom - radius + offsetX);
     dst.y = static_cast<Sint16>(f.pos.y * zoom - radius);
     SDL_BlitSurface(s, nullptr, target, &dst);

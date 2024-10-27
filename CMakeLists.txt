@@ -12,6 +12,7 @@ find_package(SDL REQUIRED)
 
 option(BITTBOY "Target Bittboy" OFF)
 option(FIXED "Use fixed point math" ${BITTBOY})
+option(DEBUG_VISUALIZATION "Visualize internal workings of the renderer" OFF)
 
 if(FIXED)
   message(STATUS "Fixed point math mode")
@@ -21,6 +22,11 @@ endif()
 if(BITTBOY)
   message(STATUS "Building for BittBoy")
   add_definitions(-DBITTBOY)
+endif()
+
+if(DEBUG_VISUALIZATION)
+  message(STATUS "Debug visualization on")
+  add_definitions(-DDEBUG_VISUALIZATION)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

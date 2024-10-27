@@ -98,6 +98,8 @@ int main() {
 #endif
   if (!screen) return 1;
 
+  ShadedSphere::initTables();
+
   bool running = true;
   SDL_Event event;
 
@@ -206,6 +208,10 @@ int main() {
   std::cout << "simMicros avg: " << simTime/numFrames << std::endl;
   std::cout << "renderMicros avg: " << renderTime/numFrames << std::endl;
   std::cout << "renderToSim: " << renderTime/static_cast<float>(simTime) << std::endl;
+  std::cout << "sphereCacheMisses: " << SphereCache::numCacheMisses << std::endl;
+  std::cout << "sphereCacheAngleMisses: " << SphereCache::numCacheAngleMisses << std::endl;
+  std::cout << "sphereCacheReassignMisses: " << SphereCache::numCacheReassignMisses << std::endl;
+  std::cout << "sphereCacheHits: " << SphereCache::numCacheHits << std::endl;
 
   SDL_Quit();
 }

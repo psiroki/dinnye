@@ -38,6 +38,7 @@ struct ShadedSphere {
   PixelBuffer albedo;
   uint32_t *shading;
 
+  static void initTables();
   void render(PixelBuffer &target, int cx, int cy, int radius, int angle);
 };
 
@@ -47,8 +48,17 @@ class SphereCache {
   int radius;
   int angle;
   bool dirty;
+#ifdef DEBUG_VISUALIZATION
+  int invalidationReason;
+#endif
+  friend class FruitRenderer;
 
 public:
+  static int numCacheHits;
+  static int numCacheMisses;
+  static int numCacheAngleMisses;
+  static int numCacheReassignMisses;
+
   inline SphereCache(): s(nullptr), cache(nullptr), radius(0), angle(0), dirty(false) { }
   
   inline ~SphereCache() {
@@ -58,9 +68,15 @@ public:
     }
   }
 
-  void reassign(ShadedSphere *newSphere, int newRadius);
+  int reassign(ShadedSphere *newSphere, int newRadius);
   void release();
   SDL_Surface* withAngle(int newAngle);
+
+#ifdef DEBUG_VISUALIZATION
+  int getInvalidationReason() {
+    return invalidationReason;
+  }
+#endif
 };
 
 class FruitRenderer {
