@@ -112,14 +112,17 @@ class FruitRenderer {
   SDL_Surface *target;
   float zoom;
   float offsetX;
+  float sizeX, sizeY;
   int fontSize;
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
 
-  inline void setLayout(float newZoom, float newOffsetX) {
+  inline void setLayout(float newZoom, float newOffsetX, const FruitSim &sim) {
     zoom = newZoom;
     offsetX = newOffsetX;
+    sizeX = sim.getWorldWidth();
+    sizeY = sim.getWorldHeight();
   }
   void renderBackground(SDL_Surface *background);
   void renderFruits(Fruit *fruits, int count, int selection);

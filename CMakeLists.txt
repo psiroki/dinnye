@@ -68,5 +68,5 @@ include_directories(${SRC_COMMON_DIR} ${SRC_NATIVE_DIR})
 # Add the executable target
 add_executable(planets ${SOURCES} ${HEADERS})
 
-# Link SDL1 and the math library (libm)
-target_link_libraries(planets SDL SDL_ttf m)
+# Link with libraries
+target_link_libraries(planets SDL SDL_ttf m pthread)

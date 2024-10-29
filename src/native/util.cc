@@ -54,3 +54,25 @@ float Timestamp::elapsedSeconds(bool reset) {
 float Timestamp::secondsTo(const Timestamp &other) {
   return secondsDiff(time, other.time);
 }
+
+Condition::Condition() {
+  pthread_mutex_init(&mutex, nullptr);
+  pthread_cond_init(&condition, nullptr);
+}
+
+Condition::~Condition() {
+  pthread_mutex_destroy(&mutex);
+  pthread_cond_destroy(&condition);
+}
+
+void Condition::wait() {
+  pthread_mutex_lock(&mutex);
+  pthread_cond_wait(&condition, &mutex);
+  pthread_mutex_unlock(&mutex);
+}
+
+void Condition::notify() {
+  pthread_mutex_lock(&mutex);
+  pthread_cond_signal(&condition);
+  pthread_mutex_unlock(&mutex);
+}

@@ -415,6 +415,31 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
       SDL_BlitSurface(text, nullptr, background, &dst);
     }
   }
+  if (SDL_MUSTLOCK(background)) {
+    SDL_LockSurface(background);
+  }
+  PixelBuffer pb(background);
+  int left = offsetX;
+  int right = offsetX + sizeX * zoom;
+  int top = 0;
+  int bottom = sizeY * zoom; 
+  for (int y = top; y < bottom; ++y) {
+    uint32_t *line = pb.pixels + pb.pitch * y;
+    int shadowLeft = max(0, left - 8);
+    int shadowRight = min(pb.width, right + 8);
+    for (int x = shadowLeft; x < left; ++x) {
+      line[x] = ablend(line[x], 0x80);
+    }
+    for (int x = left; x < right; ++x) {
+      line[x] = ablend(line[x], 0xC0);
+    }
+    for (int x = right; x < shadowRight; ++x) {
+      line[x] = ablend(line[x], 0x80);
+    }
+  }
+  if (SDL_MUSTLOCK(background)) {
+    SDL_UnlockSurface(background);
+  }
 }
 
 void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection) {
@@ -427,7 +452,25 @@ void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection) {
       .w = 4,
       .h = static_cast<Uint16>(def.h * 6 / 8),
     };
-    SDL_FillRect(target, &rect, 0xFFFFFFFFu);
+    if (SDL_MUSTLOCK(target)) {
+      SDL_LockSurface(target);
+    }
+    PixelBuffer pb(target);
+    int bottom = rect.y + rect.h;
+    int right = def.x << 2;
+    for (int y = rect.y; y < bottom; ++y) {
+      uint32_t *line = pb.pixels + pb.pitch * y;
+      int r = right-- >> 2;
+      for (int x = 0; x < r; ++x) {
+        uint32_t col = line[x+2];
+        int red = (col >> 16) & 0xFF;
+        line[x] = 0xFFFFFFFF - ablend(col, red);
+      }
+    }
+    if (SDL_MUSTLOCK(target)) {
+      SDL_UnlockSurface(target);
+    }
+    //SDL_FillRect(target, &rect, 0xFFFFFFFFu);
   }
   // Render playfield
   for (int i = 0; i < count; ++i) {

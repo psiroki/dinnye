@@ -72,11 +72,11 @@ float radii[numRadii];
 const int numRandomRadii = numRadii / 2;
 const float angleScale = 32768.0f / 3.141592653589793f;
 
-void Fruit::move() {
+void Fruit::move(Scalar gravity) {
   Point diff = pos - lastPos;
   lastPos = pos;
-  pos.y += 0.0078125f;
-  diff *= 0.999f;
+  pos.y += gravity;
+  diff *= Scalar(0.999f);
   pos += diff;
   relSum.x = relSum.y = 0.0f;
   relCount = 0;
@@ -90,7 +90,7 @@ void Fruit::roll() {
       rel.rotate90();
 
       rel *= rsqrt(rel.lengthSquared());
-      Scalar angleVel = (rel * vel) * (1.0f / 3.141592654f);
+      Scalar angleVel = (rel * vel) * (1.0e-1f / 3.141592654f);
       rotation += angleVel * angleScale;
     }
   }
@@ -158,6 +158,7 @@ void Fruit::constrainInside() {
 
 Fruit* FruitSim::init(int worldSeed) {
   Random rand(worldSeed);
+  gravity = Scalar(0.0078125f);
   radii[0] = 1.0f / 3.0f;
   for (int i = 1; i < numRadii; ++i) {
     float fac = i / static_cast<float>(numRadii - 1);
@@ -187,13 +188,15 @@ Fruit* FruitSim::init(int worldSeed) {
 Fruit* FruitSim::simulate(int frameSeed) {
   // apply gravity and movement
   for (int i = 0; i < numFruits; ++i) {
-    fruits[i].move();
+    fruits[i].move(gravity);
   }
-  for (int iter = 0; iter < 8; ++iter) {
+  const int numIter = 16;
+  for (int iter = 0; iter < numIter; ++iter) {
     // apply constraints
     for (int i = 1; i < numFruits; ++i) {
       for (int j = 0; j < i; ++j) {
         if (fruits[j].keepDistance(fruits[i])) {
+          ++popCount;
           if (i < numFruits - 1) {
             fruits[i] = fruits[numFruits - 1];
           }
@@ -244,11 +247,11 @@ Fruit* FruitSim::previewFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed
   return result;
 }
 
-Scalar FruitSim::getWorldWidth() {
+Scalar FruitSim::getWorldWidth() const {
   return worldSizeX;
 }
 
-Scalar FruitSim::getWorldHeight() {
+Scalar FruitSim::getWorldHeight() const {
   return worldSizeY;
 }
 
@@ -262,4 +265,8 @@ int FruitSim::getNumRandomRadii() {
 
 Scalar FruitSim::getRadius(int index) {
   return radii[index];
+}
+
+int FruitSim::getPopCount() const {
+  return popCount;
 }

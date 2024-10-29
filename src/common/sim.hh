@@ -242,7 +242,7 @@ struct Fruit {
   Point relSum;
   uint32_t relCount;
 
-  void move();
+  void move(Scalar gravity);
   void roll();
   bool keepDistance(Fruit &other);
   void constrainInside();
@@ -254,6 +254,8 @@ const int numRadii = 11;
 class FruitSim {
   Fruit fruits[fruitCap];
   int numFruits;
+  int popCount;
+  Scalar gravity;
 public:
   inline FruitSim() { }
 
@@ -265,11 +267,15 @@ public:
   Fruit* simulate(int frameSeed);
   bool addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed);
   Fruit* previewFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed);
-  Scalar getWorldWidth();
-  Scalar getWorldHeight();
+  inline void setGravity(float newValue) {
+    gravity = Scalar(newValue);
+  }
+  Scalar getWorldWidth() const;
+  Scalar getWorldHeight() const;
   int getNumRadii();
   int getNumRandomRadii();
   Scalar getRadius(int index);
+  int getPopCount() const;
 };
 
 #ifdef IMPLEMENT_SIM

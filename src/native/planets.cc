@@ -1,6 +1,7 @@
 #include <SDL/SDL.h>
 #include <SDL/SDL_ttf.h>
 #include <iostream>
+#include <fstream>
 #include <time.h>
 #include <string.h>
 
@@ -14,6 +15,7 @@
 #include "renderer.hh"
 #include "util.hh"
 #include "image.hh"
+#include "audio.hh"
 
 template <typename T, std::size_t N>
 T sumArray(const T (&arr)[N]) {
@@ -49,6 +51,8 @@ enum class Control {
   UNMAPPED, UP, DOWN, LEFT, RIGHT, NORTH, SOUTH, WEST, EAST, R1, L1, R2, L2, START, SELECT, MENU, LAST_ITEM,
 };
 
+const int dropOffset = 4953;
+
 struct ControlState {
   bool controlState[static_cast<int>(Control::LAST_ITEM)];
 
@@ -63,7 +67,7 @@ struct ControlState {
 
 // Initialize SDL and create a window with the specified dimensions
 SDL_Surface *initSDL(int width, int height) {
-  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
     std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
     return nullptr;
   }
@@ -127,7 +131,19 @@ struct NextPlacement {
   }
 };
 
-int main() {
+class Planets {
+  SDL_Surface *screen;
+  Mixer mixer;
+  static void callAudioCallback(void *userData, uint8_t *stream, int len);
+public:
+  void start();
+};
+
+void Planets::callAudioCallback(void *userData, uint8_t *stream, int len) {
+  reinterpret_cast<Planets*>(userData)->mixer.audioCallback(stream, len);
+}
+
+void Planets::start() {
 #ifdef BITTBOY
 #pragma message "BittBoy build"
   SDL_Surface *screen = initSDL(320, 240);
@@ -135,7 +151,60 @@ int main() {
 #else
   SDL_Surface *screen = initSDL(640, 480);
 #endif
-  if (!screen) return 1;
+  if (!screen) return;
+
+  SoundBuffer allSounds;
+  allSounds.resize(10886);
+  std::ifstream file("assets/sounds.dat", std::ios::binary);
+
+  if (file.is_open()) {
+    file.read(reinterpret_cast<char*>(allSounds.samples), 21772);
+    file.close();
+    // unpack mono to stereo
+    for (int i = (allSounds.numSamples >> 1) - 1; i > 0; --i) {
+      uint32_t twoSamples = allSounds.samples[i];
+      uint32_t *p = allSounds.samples + i * 2;
+      p[0] = (twoSamples & 0xFFFF) | (twoSamples << 16);
+      p[1] = (twoSamples >> 16) | (twoSamples & 0xFFFF0000);
+    }
+  } else {
+    memset(allSounds.samples, 0, allSounds.numSamples*sizeof(*allSounds.samples));
+  }
+
+  SoundBufferView pop(allSounds, 0, dropOffset);
+  SoundBufferView drop(allSounds, dropOffset);
+
+  for (int i = 0; i < drop.numSamples; ++i) {
+    uint32_t sample = (drop.samples[i] & 0xFFFF) >> 3;
+    drop.samples[i] = sample | (sample << 16);
+  }
+
+  SDL_AudioSpec desiredAudioSpec;
+  SDL_AudioSpec actualAudioSpec;
+  desiredAudioSpec.freq = 44100;
+  desiredAudioSpec.format = AUDIO_S16;
+  desiredAudioSpec.channels = 2;
+  desiredAudioSpec.samples = 512;
+  desiredAudioSpec.userdata = this;
+  desiredAudioSpec.callback = callAudioCallback;
+  memcpy(&actualAudioSpec, &desiredAudioSpec, sizeof(actualAudioSpec));
+  char log[256] { 0 };
+  SDL_AudioDriverName(log, sizeof(log));
+  std::cerr << "Audio driver: " << log << std::endl;
+  std::cerr << "Opening audio device" << std::endl;
+  if (SDL_OpenAudio(&desiredAudioSpec, &actualAudioSpec)) {
+    std::cerr << "Failed to set up audio. Running without it." << std::endl;
+    return;
+  }
+  std::cerr << "Freq: " << actualAudioSpec.freq << std::endl;
+  std::cerr << "Format: " << actualAudioSpec.format << std::endl;
+  std::cerr << "Channels: " << static_cast<int>(actualAudioSpec.channels) << std::endl;
+  std::cerr << "Samples: " << actualAudioSpec.samples << std::endl;
+  std::cerr << "Starting audio" << std::endl;
+  SDL_PauseAudio(0);
+
+  ThreadedFdaStreamer music(mixer, "assets/wiggle-until-you-giggle.fda");
+  music.startThread();
 
   bool running = true;
   SDL_Event event;
@@ -148,12 +217,13 @@ int main() {
 
   uint32_t seed = time.tv_nsec;
   sim.init(seed);
+  sim.setGravity(0.0078125f * 0.5f);
 
   const float zoom = screen->h / sim.getWorldHeight();
   const float rightAligned = screen->w * 0.9875f - sim.getWorldWidth() * zoom;
   const float centered = (screen->w - sim.getWorldWidth() * zoom) * 0.5f;
   const float offsetX = rightAligned * 0.75f + centered * 0.25f;
-  renderer.setLayout(zoom, offsetX);
+  renderer.setLayout(zoom, offsetX, sim);
   SDL_Surface *background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
   SDL_Surface *backgroundScreen = SDL_DisplayFormat(screen);
   if (background->w < backgroundScreen->w || background->h < backgroundScreen->h)
@@ -222,6 +292,7 @@ int main() {
     if (!placed && (controls[Control::EAST] || controls[Control::SOUTH])) {
       next.place(sim, frame.getTime().tv_nsec);
       placed = true;
+      mixer.playSound(&drop);
     } else if (!(controls[Control::EAST] || controls[Control::SOUTH])) {
       placed = false;
     }
@@ -229,8 +300,13 @@ int main() {
     Timestamp simStart;
     next.step(sim);
 
+    int popCountBefore = sim.getPopCount();
+
     Fruit *fruits = sim.simulate(++seed);
     int count = sim.getNumFruits();
+
+    if (popCountBefore != sim.getPopCount())
+      mixer.playSound(&pop);
 
     next.setupPreview(sim);
     uint32_t simMicros = simStart.elapsedSeconds() * 1000000.0f;
@@ -291,5 +367,13 @@ int main() {
   }
 #endif
 
+  music.stopThread();
+
   SDL_Quit();
+}
+
+int main() {
+  Planets planets;
+  planets.start();
+  return 0;
 }
