@@ -255,6 +255,25 @@ static const char * const imageNames[] = {
   nullptr,
 };
 
+void drawProgressbar(SDL_Surface *target, int position, int numSteps) {
+  int width = target->w >> 1;
+  int height = target->w >> 5;
+  SDL_Rect r;
+  r.x = static_cast<Sint16>((target->w - width - 4) >> 1);
+  r.y = static_cast<Sint16>((target->h - height - 4) >> 1);
+  r.w = static_cast<Uint16>(width + 4);
+  r.h = static_cast<Uint16>(height + 4);
+  SDL_FillRect(target, &r, 0xFFFFFFFFu);
+  r.w = static_cast<Uint16>(width * (numSteps - position) / numSteps);
+  if (r.w) {
+    r.x += static_cast<Sint16>(2 + width - r.w);
+    r.y += 2;
+    r.h -= 4;
+    SDL_FillRect(target, &r, 0xFF000000u);
+  }
+  SDL_Flip(target);
+}
+
 FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0) {
   ShadedSphere::initTables();
 
@@ -265,6 +284,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
     textures[i] = nullptr;
   
   for (int i = 0; i < numTextures; ++i) {
+    drawProgressbar(target, i, numTextures + 2);
     textures[i] = loadImage(imageNames[i]);
 #ifdef RED_BLUE_SWAP
     SDL_LockSurface(textures[i]);
@@ -338,6 +358,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
   SDL_RWops *rwops = createRobotoOps();
   TTF_Font *font = TTF_OpenFontRW(rwops, 1, fontSize);
   if (font) {
+    drawProgressbar(target, numTextures, numTextures + 2);
     for (int i = 0; i < numRadii; ++i) {
       const char *name = imageNames[i];
       PlanetDefinition &def(planetDefs[i]);
@@ -361,10 +382,12 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
     }
   }
 
+  drawProgressbar(target, numTextures + 1, numTextures + 2);
   shading = new uint32_t[TEXTURE_SIZE*TEXTURE_SIZE];
   PixelBuffer pb(TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, shading);
   renderSphere(pb);
 
+  drawProgressbar(target, numTextures + 2, numTextures + 2);
   sphereDefs = new ShadedSphere[numTextures];
   for (int i = 0; i < numTextures; ++i) {
     ShadedSphere &s(sphereDefs[i]);

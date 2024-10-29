@@ -1,7 +1,6 @@
 #define FDA_IMPLEMENTATION
 #include "audio.hh"
 #include <string.h>
-#include <iostream>
 
 template<typename T> class AutoDeleteArray {
   T* ptr;
@@ -184,7 +183,6 @@ void FdaStreamer::fillBuffer(int index) {
     if (compressedPosition >= compressed.getFileSize()) {
       compressedPosition = fda_decode_header(compressed.makeAvailable(0, 16), 16, &fda);
     }
-    std::cout << compressed.getFileSize() << " " << compressedPosition << std::endl;
     unsigned numSamples = samplesLeft;
     const uint8_t *p = compressed.makeAvailable(compressedPosition, 8192);
     uint32_t bytesLeftFromFile = compressed.getFileSize() - compressedPosition;
