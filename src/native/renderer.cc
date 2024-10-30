@@ -7,7 +7,7 @@
 #include "roboto.hh"
 #include "../common/sim.hh"
 
-const float pi = M_PI;
+const Scalar pi = Scalar(float(M_PI));
 
 // Uncomment this if the red and blue seems to be swapped
 //#define RED_BLUE_SWAP
@@ -41,7 +41,7 @@ inline uint32_t ablend(uint32_t col, uint8_t alpha) {
 		((v >> 8) & 0xffu);
 }
 
-void renderSphere(PixelBuffer &pb) {
+void renderSphereLightmap(PixelBuffer &pb) {
   int cx = pb.width >> 1;
   int cy = pb.height >> 1;
   int minDim = min(pb.width, pb.height);
@@ -385,7 +385,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
   drawProgressbar(target, numTextures + 1, numTextures + 2);
   shading = new uint32_t[TEXTURE_SIZE*TEXTURE_SIZE];
   PixelBuffer pb(TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, shading);
-  renderSphere(pb);
+  renderSphereLightmap(pb);
 
   drawProgressbar(target, numTextures + 2, numTextures + 2);
   sphereDefs = new ShadedSphere[numTextures];

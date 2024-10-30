@@ -157,6 +157,12 @@ void Fruit::constrainInside() {
 }
 
 Fruit* FruitSim::init(int worldSeed) {
+#ifdef SPEEDTESTING
+  numFruits = 128;
+  worldSeed = 7;
+#else
+  numFruits = 0;
+#endif
   Random rand(worldSeed);
   gravity = Scalar(0.0078125f);
   radii[0] = 1.0f / 3.0f;
@@ -166,7 +172,6 @@ Fruit* FruitSim::init(int worldSeed) {
     float exp = radii[i - 1] * 1.2968395546510096f;
     radii[i] = exp;
   }
-  numFruits = 128;
   if (numFruits > fruitCap) numFruits = fruitCap;
   for (int i = 0; i < numFruits; ++i) {
     Fruit &f(fruits[i]);

@@ -17,6 +17,17 @@
 #include "image.hh"
 #include "audio.hh"
 
+struct TimeHistogram {
+  uint32_t counts[256];
+
+  TimeHistogram(): counts { } { }
+
+  void add(uint32_t value) {
+    if (value > sizeof(counts)) value = sizeof(counts) - 1;
+    ++counts[value];
+  }
+};
+
 template <typename T, std::size_t N>
 T sumArray(const T (&arr)[N]) {
   T sum { };
@@ -33,18 +44,23 @@ void printPercentile(T sum, int percentile, const char *name, const T (&arr)[N])
   for (int i = 0; i < N; ++i) {
     n += arr[i];
     if (n >= threshold) {
-      std::cout << name << " " << percentile << " percentile millis: " << i << std::endl;
+      std::cout << name << " " << percentile << " percentile millis: " << i/10 << "." << i%10 << std::endl;
       return;
     }
   }
-  std::cout << name << " " << percentile << " percentile millis: over " << N << std::endl;
+  std::cout << name << " " << percentile << " percentile millis: over " << N/10 << "." << N%10 << std::endl;
 }
 
 template <typename T, std::size_t N>
-void printPercentiles(const char *name, const T (&arr)[N]) {
+void printPercentiles(const char *name, int start, const T (&arr)[N]) {
   T sum(sumArray(arr));
   printPercentile(sum, 95, name, arr);
   printPercentile(sum, 99, name, arr);
+  T overSum { };
+  for (int i = start; i < N; ++i) {
+    overSum += arr[i];
+  }
+  std::cout << "Percentage over " << start/10 << "." << start%10 << ": " << (100.0f*overSum) / sum << "%" << std::endl;
 }
 
 enum class Control {
@@ -64,6 +80,10 @@ struct ControlState {
     return controlState[static_cast<int>(control)];
   }
 };
+
+inline int32_t bitExtend(int16_t val) {
+  return val;
+}
 
 // Initialize SDL and create a window with the specified dimensions
 SDL_Surface *initSDL(int width, int height) {
@@ -93,20 +113,20 @@ SDL_Surface *initSDL(int width, int height) {
 }
 
 struct NextPlacement {
-  float x;  // y is always 0
-  float xv;
+  Scalar x;  // y is always 0
+  Scalar xv;
   int radIndex;
   int seed;
 
   inline void constrainInside(FruitSim &sim) {
-    float r = sim.getRadius(radIndex);
+    Scalar r = sim.getRadius(radIndex);
     if (x < r) {
       x = r;
-      if (xv < 0.0f) xv = 0.0f;
+      if (xv < Scalar(0.0f)) xv = Scalar(0.0f);
     }
     if (x > sim.getWorldWidth() - r) {
       x = sim.getWorldWidth() - r;
-      if (xv > 0.0f) xv = 0.0f;
+      if (xv > Scalar(0.0f)) xv = Scalar(0.0f);
     }
   }
 
@@ -175,8 +195,13 @@ void Planets::start() {
   SoundBufferView drop(allSounds, dropOffset);
 
   for (int i = 0; i < drop.numSamples; ++i) {
-    uint32_t sample = (drop.samples[i] & 0xFFFF) >> 3;
+    int32_t sample = bitExtend(drop.samples[i] & 0xFFFF) >> 2;
     drop.samples[i] = sample | (sample << 16);
+  }
+
+  for (int i = 0; i < pop.numSamples; ++i) {
+    uint32_t sample = bitExtend(pop.samples[i] & 0xFFFF) >> 1;
+    pop.samples[i] = sample | (sample << 16);
   }
 
   SDL_AudioSpec desiredAudioSpec;
@@ -219,10 +244,10 @@ void Planets::start() {
   sim.init(seed);
   sim.setGravity(0.0078125f * 0.5f);
 
-  const float zoom = screen->h / sim.getWorldHeight();
-  const float rightAligned = screen->w * 0.9875f - sim.getWorldWidth() * zoom;
-  const float centered = (screen->w - sim.getWorldWidth() * zoom) * 0.5f;
-  const float offsetX = rightAligned * 0.75f + centered * 0.25f;
+  const Scalar zoom = screen->h / sim.getWorldHeight();
+  const Scalar rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
+  const Scalar centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
+  const Scalar offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
   renderer.setLayout(zoom, offsetX, sim);
   SDL_Surface *background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
   SDL_Surface *backgroundScreen = SDL_DisplayFormat(screen);
@@ -249,7 +274,9 @@ void Planets::start() {
   uint32_t numFrames = 0;
   uint32_t maxSimTime = 0;
   uint32_t maxRenderTime = 0;
-  uint32_t renderTimeHistogram[32] { }, simTimeHistogram[32] { };
+  TimeHistogram renderTimeHistogram;
+  TimeHistogram simTimeHistogram;
+  TimeHistogram frameTimeHistogram;
 
   while (running) {
     ++numFrames;
@@ -312,7 +339,7 @@ void Planets::start() {
     uint32_t simMicros = simStart.elapsedSeconds() * 1000000.0f;
     simTime += simMicros;
     if (simMicros > maxSimTime) maxSimTime = simMicros;
-    ++simTimeHistogram[min(simMicros/1000, 32u)];
+    simTimeHistogram.add(simMicros/100);
 
     Timestamp renderStart;
     SDL_BlitSurface(background, nullptr, screen, nullptr);
@@ -322,10 +349,13 @@ void Planets::start() {
     uint32_t renderMicros = renderStart.elapsedSeconds() * 1000000.0f;
     renderTime += renderMicros;
     if (renderMicros > maxRenderTime) maxRenderTime = renderMicros;
-    ++renderTimeHistogram[min(renderMicros/1000, 32u)];
+    renderTimeHistogram.add(renderMicros/100);
 
     // Update the screen
     SDL_Flip(screen);
+
+    uint32_t frameMicros = frame.elapsedSeconds() * 1000000.0f;
+    frameTimeHistogram.add(frameMicros/100);
 
 #ifndef BITTBOY
     // Cap the frame rate to ~100 FPS
@@ -337,8 +367,9 @@ void Planets::start() {
   std::cout << "maxRenderMicros: " << maxRenderTime << std::endl;
   std::cout << "simMicros avg: " << simTime/numFrames << std::endl;
   std::cout << "renderMicros avg: " << renderTime/numFrames << std::endl;
-  printPercentiles("sim", simTimeHistogram);
-  printPercentiles("render", renderTimeHistogram);
+  printPercentiles("sim", 167, simTimeHistogram.counts);
+  printPercentiles("render", 167, renderTimeHistogram.counts);
+  printPercentiles("frame", 167, frameTimeHistogram.counts);
 
   std::cout << std::endl;
   std::cout << "sphereCacheMisses: " << SphereCache::numCacheMisses << std::endl;

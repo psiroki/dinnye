@@ -110,15 +110,15 @@ class FruitRenderer {
   int numSpheres;
   ShadedSphere *sphereDefs;
   SDL_Surface *target;
-  float zoom;
-  float offsetX;
-  float sizeX, sizeY;
+  Scalar zoom;
+  Scalar offsetX;
+  Scalar sizeX, sizeY;
   int fontSize;
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
 
-  inline void setLayout(float newZoom, float newOffsetX, const FruitSim &sim) {
+  inline void setLayout(Scalar newZoom, Scalar newOffsetX, const FruitSim &sim) {
     zoom = newZoom;
     offsetX = newOffsetX;
     sizeX = sim.getWorldWidth();

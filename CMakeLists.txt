@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 find_package(SDL REQUIRED)
 find_package(SDL_ttf REQUIRED)
 
+option(SPEEDTESTING "Start with a fair amount of fruits to test the speed reliably" ON)
 option(BITTBOY "Target Bittboy" OFF)
 option(FIXED "Use fixed point math" ${BITTBOY})
 option(DEBUG_VISUALIZATION "Visualize internal workings of the renderer" OFF)
@@ -18,6 +19,10 @@ option(DEBUG_VISUALIZATION "Visualize internal workings of the renderer" OFF)
 if(FIXED)
   message(STATUS "Fixed point math mode")
   add_definitions(-DFIXED)
+endif()
+
+if(SPEEDTESTING)
+  add_definitions(-DSPEEDTESTING)
 endif()
 
 if(BITTBOY)
