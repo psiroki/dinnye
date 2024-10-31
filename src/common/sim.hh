@@ -235,17 +235,23 @@ struct Point {
 };
 
 struct Fruit {
+  enum FruitFlags {
+    touched = 1, sensor = 2,
+  };
+
   Point pos;
   Point lastPos;
   Scalar r, r2;
   uint32_t rotation, rIndex;
   Point relSum;
-  uint32_t relCount;
+  uint32_t flags;
+  uint32_t bottomTouchFrame;
 
   void move(Scalar gravity);
   void roll();
-  bool keepDistance(Fruit &other);
-  void constrainInside();
+  bool keepDistance(Fruit &other, uint32_t frameIndex);
+  void constrainInside(uint32_t frameIndex);
+  bool touches(const Fruit &other) const;
 };
 
 const int fruitCap = 1024;
@@ -264,7 +270,7 @@ public:
   }
 
   Fruit* init(int worldSeed);
-  Fruit* simulate(int frameSeed);
+  Fruit* simulate(int frameSeed, uint32_t frameIndex);
   bool addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed);
   Fruit* previewFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed);
   inline void setGravity(float newValue) {
@@ -276,6 +282,7 @@ public:
   int getNumRandomRadii();
   Scalar getRadius(int index);
   int getPopCount() const;
+  bool touchesAny(const Fruit &f) const;
 };
 
 #ifdef IMPLEMENT_SIM

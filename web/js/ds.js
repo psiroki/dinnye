@@ -55,7 +55,7 @@ async function startSimulation() {
   let nextToAdd = genNext();
 
   function drawFruits(addr) {
-    const numFloatsPerFruit = 11;
+    const numFloatsPerFruit = 12;
     const numFloats = getNumFruits() * numFloatsPerFruit;
     const previewFruitAddress = previewFruit(nextToAdd.x, 0, nextToAdd.size, nextToAdd.seed);
     const addressedBytes = previewFruitAddress
@@ -102,9 +102,10 @@ async function startSimulation() {
     }
   }
 
+  let frameCounter = 0;
   let frame;
   frame = () => {
-    drawFruits(simulate(newSeed()));
+    drawFruits(simulate(newSeed(), ++frameCounter));
     requestAnimationFrame(frame);
   };
 

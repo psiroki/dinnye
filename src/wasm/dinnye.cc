@@ -129,8 +129,8 @@ extern "C" Fruit* init(int worldSeed) {
   return sim->init(worldSeed);
 }
 
-extern "C" Fruit* simulate(int frameSeed) {
-  return sim->simulate(frameSeed);
+extern "C" Fruit* simulate(int frameSeed, uint32_t frame) {
+  return sim->simulate(frameSeed, frame);
 }
 
 extern "C" bool addFruit(float x, float y, unsigned radiusIndex, int seed) {

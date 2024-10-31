@@ -125,5 +125,5 @@ public:
     sizeY = sim.getWorldHeight();
   }
   void renderBackground(SDL_Surface *background);
-  void renderFruits(Fruit *fruits, int count, int selection);
+  void renderFruits(Fruit *fruits, int count, int selection, uint32_t frameIndex);
 };

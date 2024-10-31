@@ -117,6 +117,7 @@ struct NextPlacement {
   Scalar xv;
   int radIndex;
   int seed;
+  bool valid;
 
   inline void constrainInside(FruitSim &sim) {
     Scalar r = sim.getRadius(radIndex);
@@ -142,12 +143,18 @@ struct NextPlacement {
   }
 
   inline void setupPreview(FruitSim &sim) {
-    sim.previewFruit(x, 0.0f, radIndex, seed);
+    Fruit *f = sim.previewFruit(x, -1.0f, radIndex, seed);
+    valid = f && !sim.touchesAny(*f);
   }
 
-  inline void place(FruitSim &sim, int newSeed) {
-    sim.addFruit(x, 0.0f, radIndex, seed);
-    reset(sim, newSeed);
+  inline bool place(FruitSim &sim, int newSeed) {
+    if (valid) {
+      sim.addFruit(x, -1.0f, radIndex, seed);
+      reset(sim, newSeed);
+      return true;
+    } else {
+      return false;
+    }
   }
 };
 
@@ -244,7 +251,7 @@ void Planets::start() {
   sim.init(seed);
   sim.setGravity(0.0078125f * 0.5f);
 
-  const Scalar zoom = screen->h / sim.getWorldHeight();
+  const Scalar zoom = screen->h / (sim.getWorldHeight() + Scalar(2));
   const Scalar rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
   const Scalar centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
   const Scalar offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
@@ -271,7 +278,7 @@ void Planets::start() {
   bool placed = false;
   uint32_t simTime = 0;
   uint32_t renderTime = 0;
-  uint32_t numFrames = 0;
+  uint32_t frameCounter = 0;
   uint32_t maxSimTime = 0;
   uint32_t maxRenderTime = 0;
   TimeHistogram renderTimeHistogram;
@@ -279,7 +286,7 @@ void Planets::start() {
   TimeHistogram frameTimeHistogram;
 
   while (running) {
-    ++numFrames;
+    ++frameCounter;
     Timestamp frame;
     // Event handling
     while (SDL_PollEvent(&event)) {
@@ -317,9 +324,9 @@ void Planets::start() {
     if (controls[Control::LEFT]) next.xv -= 0.01f;
     if (controls[Control::RIGHT]) next.xv += 0.01f;
     if (!placed && (controls[Control::EAST] || controls[Control::SOUTH])) {
-      next.place(sim, frame.getTime().tv_nsec);
+      if (next.place(sim, frame.getTime().tv_nsec))
+        mixer.playSound(&drop);
       placed = true;
-      mixer.playSound(&drop);
     } else if (!(controls[Control::EAST] || controls[Control::SOUTH])) {
       placed = false;
     }
@@ -329,7 +336,7 @@ void Planets::start() {
 
     int popCountBefore = sim.getPopCount();
 
-    Fruit *fruits = sim.simulate(++seed);
+    Fruit *fruits = sim.simulate(++seed, frameCounter);
     int count = sim.getNumFruits();
 
     if (popCountBefore != sim.getPopCount())
@@ -344,7 +351,7 @@ void Planets::start() {
     Timestamp renderStart;
     SDL_BlitSurface(background, nullptr, screen, nullptr);
 
-    renderer.renderFruits(fruits, count + 1, next.radIndex);
+    renderer.renderFruits(fruits, count + 1, next.radIndex, frameCounter);
 
     uint32_t renderMicros = renderStart.elapsedSeconds() * 1000000.0f;
     renderTime += renderMicros;
@@ -365,8 +372,8 @@ void Planets::start() {
   }
   std::cout << "maxSimMicros: " << maxSimTime << std::endl;
   std::cout << "maxRenderMicros: " << maxRenderTime << std::endl;
-  std::cout << "simMicros avg: " << simTime/numFrames << std::endl;
-  std::cout << "renderMicros avg: " << renderTime/numFrames << std::endl;
+  std::cout << "simMicros avg: " << simTime/frameCounter << std::endl;
+  std::cout << "renderMicros avg: " << renderTime/frameCounter << std::endl;
   printPercentiles("sim", 167, simTimeHistogram.counts);
   printPercentiles("render", 167, renderTimeHistogram.counts);
   printPercentiles("frame", 167, frameTimeHistogram.counts);

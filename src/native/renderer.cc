@@ -444,8 +444,8 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
   PixelBuffer pb(background);
   int left = offsetX;
   int right = offsetX + sizeX * zoom;
-  int top = 0;
-  int bottom = sizeY * zoom; 
+  int bottom = target->h;
+  int top = bottom - sizeY * zoom;
   for (int y = top; y < bottom; ++y) {
     uint32_t *line = pb.pixels + pb.pitch * y;
     int shadowLeft = max(0, left - 8);
@@ -465,7 +465,7 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
   }
 }
 
-void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection) {
+void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection, uint32_t frameIndex) {
   // Render selection
   if (selection >= 0 && selection < numRadii) {
     PlanetDefinition &def(planetDefs[selection]);
@@ -495,6 +495,10 @@ void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection) {
     }
     //SDL_FillRect(target, &rect, 0xFFFFFFFFu);
   }
+
+  int bottom = target->h;
+  int top = bottom - sizeY * zoom;
+
   // Render playfield
   for (int i = 0; i < count; ++i) {
     Fruit &f(fruits[i]);
@@ -505,17 +509,18 @@ void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection) {
     SDL_Rect dst;
 #ifdef DEBUG_VISUALIZATION
     int invReason = sc.getInvalidationReason();
-    if (invReason || reassignResult) {
+    bool grounded = f.bottomTouchFrame == frameIndex;
+    if (invReason || reassignResult || grounded) {
       dst.x = static_cast<Sint16>(f.pos.x * zoom - radius + offsetX);
       dst.y = static_cast<Sint16>(f.pos.y * zoom - radius);
       dst.h = dst.w = radius << 1;
-      uint32_t color = invReason * 0x7F | reassignResult * 0x7F00 | 0xFF000000u;
+      uint32_t color = invReason * 0x7F | reassignResult * 0x7F00 | (grounded ? 0xFF0000 : 0) | 0xFF000000u;
       SDL_FillRect(target, &dst, color);
       memset(&dst, 0, sizeof(dst));
     }
 #endif
     dst.x = static_cast<Sint16>(f.pos.x * zoom - radius + offsetX);
-    dst.y = static_cast<Sint16>(f.pos.y * zoom - radius);
+    dst.y = static_cast<Sint16>(f.pos.y * zoom - radius + top);
     SDL_BlitSurface(s, nullptr, target, &dst);
   }
   for (int i = count; i < numSpheres; ++i) {

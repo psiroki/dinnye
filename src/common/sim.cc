@@ -79,11 +79,11 @@ void Fruit::move(Scalar gravity) {
   diff *= Scalar(0.999f);
   pos += diff;
   relSum.x = relSum.y = 0.0f;
-  relCount = 0;
+  flags &= ~touched;
 }
 
 void Fruit::roll() {
-  if (relCount) {
+  if (flags & touched) {
     Point vel = pos - lastPos;
     if (vel.lengthSquared() > Scalar(1.0e-3f)) {
       Point rel = relSum;
@@ -96,7 +96,15 @@ void Fruit::roll() {
   }
 }
 
-bool Fruit::keepDistance(Fruit &other) {
+bool Fruit::touches(const Fruit &other) const {
+  Point diff = other.pos - pos;
+  Scalar d2 = diff.x * diff.x + diff.y * diff.y;
+  Scalar rsum = r + other.r;
+  Scalar rs = rsum * rsum;
+  return d2 < rs;
+}
+
+bool Fruit::keepDistance(Fruit &other, uint32_t frameIndex) {
   Point diff = other.pos - pos;
   Scalar d2 = diff.x * diff.x + diff.y * diff.y;
   Scalar rsum = r + other.r;
@@ -109,8 +117,9 @@ bool Fruit::keepDistance(Fruit &other) {
       r = radii[rIndex];
       r2 = r*r;
       pos = pos + other.pos;
-      pos *= 0.5f;
+      pos *= Scalar(0.5f);
       lastPos = pos;
+      bottomTouchFrame = 0;
       return true;
     } else {
       // nudge them
@@ -118,7 +127,7 @@ bool Fruit::keepDistance(Fruit &other) {
       // d2 = d^2 (distance squared)
       // dr = 1/sqrt(d2)
       // d = d2*dr = (d2 / sqrt(d2) = sqrt(d2))
-      Scalar factor = (r + other.r - d2 * dr) * (1.0f / 16.0f) / rsum;
+      Scalar factor = (r + other.r - d2 * dr) * Scalar(1.0f / 16.0f) / rsum;
       diff *= factor;
       other.pos += diff * r;
       pos -= diff * other.r;
@@ -127,32 +136,38 @@ bool Fruit::keepDistance(Fruit &other) {
       // to alter the rotation vector
       diff *= 4.0f;
       relSum += diff;
-      ++relCount;
+      flags |= touched;
       other.relSum -= diff;
-      ++other.relCount;
+      other.flags |= touched;
+      if (bottomTouchFrame == frameIndex) {
+        other.bottomTouchFrame = frameIndex;
+      } else if (other.bottomTouchFrame == frameIndex) {
+        bottomTouchFrame = frameIndex;
+      }
     }
   }
   return false;
 }
 
-void Fruit::constrainInside() {
+void Fruit::constrainInside(uint32_t frameIndex) {
   Point diff = pos - lastPos;
   if (pos.x < r) {
     pos.x = r;
     relSum += Point(r, 0.0f);
-    ++relCount;
+    flags |= touched;
   }
   if (pos.x > worldSizeX - r) {
     pos.x = worldSizeX - r;
     relSum += Point(-r, 0.0f);
-    ++relCount;
+    flags |= touched;
   }
   // there is no top
   // if (pos.y < r) pos.y = r;
   if (pos.y > worldSizeY - r) {
     pos.y = worldSizeY - r;
     relSum += Point(0.0f, r);
-    ++relCount;
+    flags |= touched;
+    bottomTouchFrame = frameIndex;
   }
 }
 
@@ -190,7 +205,7 @@ Fruit* FruitSim::init(int worldSeed) {
   return fruits;
 }
 
-Fruit* FruitSim::simulate(int frameSeed) {
+Fruit* FruitSim::simulate(int frameSeed, uint32_t frameIndex) {
   // apply gravity and movement
   for (int i = 0; i < numFruits; ++i) {
     fruits[i].move(gravity);
@@ -200,7 +215,7 @@ Fruit* FruitSim::simulate(int frameSeed) {
     // apply constraints
     for (int i = 1; i < numFruits; ++i) {
       for (int j = 0; j < i; ++j) {
-        if (fruits[j].keepDistance(fruits[i])) {
+        if (fruits[j].keepDistance(fruits[i], frameIndex)) {
           ++popCount;
           if (i < numFruits - 1) {
             fruits[i] = fruits[numFruits - 1];
@@ -211,7 +226,7 @@ Fruit* FruitSim::simulate(int frameSeed) {
       }
     }
     for (int i = 0; i < numFruits; ++i) {
-      fruits[i].constrainInside();
+      fruits[i].constrainInside(frameIndex);
     }
     for (int i = 0; i < numFruits; ++i) {
       fruits[i].roll();
@@ -233,7 +248,6 @@ bool FruitSim::addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {
 
   if (x < f.r) x = f.r;
   if (x > worldSizeX - f.r) x = worldSizeX - f.r;
-  if (y < f.r) y = f.r;
   if (y > worldSizeY - f.r) y = worldSizeY - f.r;
 
   f.pos.x = x;
@@ -246,10 +260,20 @@ bool FruitSim::addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {
 Fruit* FruitSim::previewFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {
   int numFruitsBefore = numFruits;
   Fruit *result = nullptr;
-  if (addFruit(x, y, radiusIndex, seed))
+  if (addFruit(x, y, radiusIndex, seed)) {
     result = fruits + (numFruits - 1);
+    result->flags |= Fruit::sensor;
+  }
   numFruits = numFruitsBefore;
   return result;
+}
+
+bool FruitSim::touchesAny(const Fruit &f) const {
+  for (int i = 0; i < numFruits; ++i) {
+    if (fruits[i].touches(f))
+      return true;
+  }
+  return false;
 }
 
 Scalar FruitSim::getWorldWidth() const {
