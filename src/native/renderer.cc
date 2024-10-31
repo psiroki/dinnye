@@ -200,7 +200,11 @@ void SphereCache::release() {
   dirty = false;
 }
 
-SDL_Surface* SphereCache::withAngle(int newAngle) {
+SDL_Surface* SphereCache::withAngle(int newAngle, bool newOutlier) {
+  if (outlier != newOutlier) {
+    outlier = newOutlier;
+    dirty = true;
+  }
   if (!dirty) {
     int diff = abs(angle - newAngle);
     if (diff >= 32768) diff = 65535 - diff;
@@ -226,6 +230,19 @@ SDL_Surface* SphereCache::withAngle(int newAngle) {
 
     PixelBuffer pb(cache);
     s->render(pb, radius, radius, radius, angle & 0xffff);
+    if (outlier) {
+      uint32_t *line  = pb.pixels + pb.pitch * (pb.height - 1);
+      for (int y = pb.height - 1; y > 0; --y) {
+        for (int x = 0; x < pb.width; ++x) {
+          uint32_t col = line[x];
+          uint32_t above = line[x - pb.pitch];
+          if ((col & 0xFF000000u) < (above & 0xFF000000u)) {
+            line[x] = col + above | 0xFFFFFFu;
+          }
+        }
+        line -= pb.pitch;
+      }
+    }
 
     if (SDL_MUSTLOCK(cache)) {
       SDL_UnlockSurface(cache);
@@ -465,7 +482,7 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
   }
 }
 
-void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection, uint32_t frameIndex) {
+void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection, int outlierIndex, uint32_t frameIndex) {
   // Render selection
   if (selection >= 0 && selection < numRadii) {
     PlanetDefinition &def(planetDefs[selection]);
@@ -493,7 +510,6 @@ void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection, uint32
     if (SDL_MUSTLOCK(target)) {
       SDL_UnlockSurface(target);
     }
-    //SDL_FillRect(target, &rect, 0xFFFFFFFFu);
   }
 
   int bottom = target->h;
@@ -505,7 +521,7 @@ void FruitRenderer::renderFruits(Fruit *fruits, int count, int selection, uint32
     SphereCache &sc(spheres[i + numRadii]);
     int radius = f.r * zoom;
     int reassignResult = sc.reassign(sphereDefs + f.rIndex, radius);
-    SDL_Surface *s = sc.withAngle((-f.rotation) & 0xffff);
+    SDL_Surface *s = sc.withAngle((-f.rotation) & 0xffff, i == outlierIndex);
     SDL_Rect dst;
 #ifdef DEBUG_VISUALIZATION
     int invReason = sc.getInvalidationReason();

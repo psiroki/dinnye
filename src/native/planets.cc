@@ -284,9 +284,16 @@ void Planets::start() {
   TimeHistogram renderTimeHistogram;
   TimeHistogram simTimeHistogram;
   TimeHistogram frameTimeHistogram;
+  bool lost = false;
+  Fruit *fruits;
+  int outlierIndex = -1;
 
   while (running) {
-    ++frameCounter;
+    if (!lost && frameCounter) {
+      outlierIndex = sim.findGroundedOutside(frameCounter);
+      if (outlierIndex >= 0) lost = true;
+    }
+    if (!lost) ++frameCounter;
     Timestamp frame;
     // Event handling
     while (SDL_PollEvent(&event)) {
@@ -312,7 +319,7 @@ void Planets::start() {
         }
         controls[c] = event.type == SDL_KEYDOWN;
       }
-      if (event.type == SDL_MOUSEMOTION) {
+      if (!lost && event.type == SDL_MOUSEMOTION) {
         next.x = (event.motion.x - offsetX) / zoom;
         next.constrainInside(sim);
       }
@@ -321,37 +328,41 @@ void Planets::start() {
       }
     }
 
-    if (controls[Control::LEFT]) next.xv -= 0.01f;
-    if (controls[Control::RIGHT]) next.xv += 0.01f;
-    if (!placed && (controls[Control::EAST] || controls[Control::SOUTH])) {
-      if (next.place(sim, frame.getTime().tv_nsec))
-        mixer.playSound(&drop);
-      placed = true;
-    } else if (!(controls[Control::EAST] || controls[Control::SOUTH])) {
-      placed = false;
+    if (!lost) {
+      if (controls[Control::LEFT]) next.xv -= 0.01f;
+      if (controls[Control::RIGHT]) next.xv += 0.01f;
+      if (!placed && (controls[Control::EAST] || controls[Control::SOUTH])) {
+        if (next.place(sim, frame.getTime().tv_nsec))
+          mixer.playSound(&drop);
+        placed = true;
+      } else if (!(controls[Control::EAST] || controls[Control::SOUTH])) {
+        placed = false;
+      }
     }
 
     Timestamp simStart;
-    next.step(sim);
+    if (!lost) next.step(sim);
 
     int popCountBefore = sim.getPopCount();
 
-    Fruit *fruits = sim.simulate(++seed, frameCounter);
+    if (!lost) fruits = sim.simulate(++seed, frameCounter);
     int count = sim.getNumFruits();
 
     if (popCountBefore != sim.getPopCount())
       mixer.playSound(&pop);
 
     next.setupPreview(sim);
-    uint32_t simMicros = simStart.elapsedSeconds() * 1000000.0f;
-    simTime += simMicros;
-    if (simMicros > maxSimTime) maxSimTime = simMicros;
-    simTimeHistogram.add(simMicros/100);
+    if (!lost) {
+      uint32_t simMicros = simStart.elapsedSeconds() * 1000000.0f;
+      simTime += simMicros;
+      if (simMicros > maxSimTime) maxSimTime = simMicros;
+      simTimeHistogram.add(simMicros/100);
+    }
 
     Timestamp renderStart;
     SDL_BlitSurface(background, nullptr, screen, nullptr);
 
-    renderer.renderFruits(fruits, count + 1, next.radIndex, frameCounter);
+    renderer.renderFruits(fruits, count + 1, next.radIndex, outlierIndex, frameCounter);
 
     uint32_t renderMicros = renderStart.elapsedSeconds() * 1000000.0f;
     renderTime += renderMicros;

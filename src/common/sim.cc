@@ -206,6 +206,7 @@ Fruit* FruitSim::init(int worldSeed) {
 }
 
 Fruit* FruitSim::simulate(int frameSeed, uint32_t frameIndex) {
+  lastPopCount = 0;
   // apply gravity and movement
   for (int i = 0; i < numFruits; ++i) {
     fruits[i].move(gravity);
@@ -217,6 +218,7 @@ Fruit* FruitSim::simulate(int frameSeed, uint32_t frameIndex) {
       for (int j = 0; j < i; ++j) {
         if (fruits[j].keepDistance(fruits[i], frameIndex)) {
           ++popCount;
+          ++lastPopCount;
           if (i < numFruits - 1) {
             fruits[i] = fruits[numFruits - 1];
           }
@@ -233,6 +235,15 @@ Fruit* FruitSim::simulate(int frameSeed, uint32_t frameIndex) {
     }
   }
   return fruits;
+}
+
+int FruitSim::findGroundedOutside(uint32_t frameIndex) {
+  if (lastPopCount > 0) return -1;
+  for (int i = 0; i < numFruits; ++i) {
+    Fruit &f(fruits[i]);
+    if (f.bottomTouchFrame == frameIndex && f.pos.y < f.r) return i;
+  }
+  return -1;
 }
 
 bool FruitSim::addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {

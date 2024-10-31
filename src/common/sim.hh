@@ -261,12 +261,17 @@ class FruitSim {
   Fruit fruits[fruitCap];
   int numFruits;
   int popCount;
+  int lastPopCount;
   Scalar gravity;
 public:
   inline FruitSim() { }
 
   inline int getNumFruits() {
     return numFruits;
+  }
+
+  inline void removeAllFruits() {
+    numFruits = 0;
   }
 
   Fruit* init(int worldSeed);
@@ -276,6 +281,7 @@ public:
   inline void setGravity(float newValue) {
     gravity = Scalar(newValue);
   }
+  int findGroundedOutside(uint32_t frameIndex);
   Scalar getWorldWidth() const;
   Scalar getWorldHeight() const;
   int getNumRadii();

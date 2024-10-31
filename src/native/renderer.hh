@@ -61,6 +61,7 @@ class SphereCache {
   SDL_Surface *cache;
   int radius;
   int angle;
+  bool outlier;
   bool dirty;
 #ifdef DEBUG_VISUALIZATION
   int invalidationReason;
@@ -84,7 +85,7 @@ public:
 
   int reassign(ShadedSphere *newSphere, int newRadius);
   void release();
-  SDL_Surface* withAngle(int newAngle);
+  SDL_Surface* withAngle(int newAngle, bool outlier = false);
 
 #ifdef DEBUG_VISUALIZATION
   int getInvalidationReason() {
@@ -125,5 +126,5 @@ public:
     sizeY = sim.getWorldHeight();
   }
   void renderBackground(SDL_Surface *background);
-  void renderFruits(Fruit *fruits, int count, int selection, uint32_t frameIndex);
+  void renderFruits(Fruit *fruits, int count, int selection, int outlierIndex, uint32_t frameIndex);
 };
