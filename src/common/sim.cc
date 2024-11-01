@@ -104,14 +104,21 @@ bool Fruit::touches(const Fruit &other) const {
   return d2 < rs;
 }
 
-bool Fruit::keepDistance(Fruit &other, uint32_t frameIndex) {
+int Fruit::keepDistance(Fruit &other, uint32_t frameIndex) {
   Point diff = other.pos - pos;
   Scalar d2 = diff.x * diff.x + diff.y * diff.y;
   Scalar rsum = r + other.r;
   Scalar rs = rsum * rsum;
   if (d2 < rs) {
     // overlap
-    if (rIndex == other.rIndex && rIndex < numRadii - 1) {
+    if (rIndex == other.rIndex) {
+      int score = (rIndex + 1)*(rIndex + 2) >> 1;
+      other.flags |= deletable;
+      if (rIndex >= numRadii - 1) {
+        // both of them should disappear
+        flags |= deletable;
+        return score;
+      }
       // merge them
       ++rIndex;
       r = radii[rIndex];
@@ -120,7 +127,7 @@ bool Fruit::keepDistance(Fruit &other, uint32_t frameIndex) {
       pos *= Scalar(0.5f);
       lastPos = pos;
       bottomTouchFrame = 0;
-      return true;
+      return score;
     } else {
       // nudge them
       Scalar dr = rsqrt(d2);
@@ -139,14 +146,14 @@ bool Fruit::keepDistance(Fruit &other, uint32_t frameIndex) {
       flags |= touched;
       other.relSum -= diff;
       other.flags |= touched;
-      if (bottomTouchFrame == frameIndex) {
+      if (bottomTouchFrame == frameIndex && diff.y < -scalarAbs(diff.x)/2) {
         other.bottomTouchFrame = frameIndex;
       } else if (other.bottomTouchFrame == frameIndex) {
         bottomTouchFrame = frameIndex;
       }
     }
   }
-  return false;
+  return 0;
 }
 
 void Fruit::constrainInside(uint32_t frameIndex) {
@@ -173,7 +180,7 @@ void Fruit::constrainInside(uint32_t frameIndex) {
 
 Fruit* FruitSim::init(int worldSeed) {
 #ifdef SPEEDTESTING
-  numFruits = 128;
+  numFruits = 256;
   worldSeed = 7;
 #else
   numFruits = 0;
@@ -194,6 +201,7 @@ Fruit* FruitSim::init(int worldSeed) {
     f.r = radii[f.rIndex];
     f.r2 = f.r * f.r;
     f.rotation = rand() & 65535;
+    f.flags = 0;
 
     float d = f.r * 2.0f;
 
@@ -216,14 +224,25 @@ Fruit* FruitSim::simulate(int frameSeed, uint32_t frameIndex) {
     // apply constraints
     for (int i = 1; i < numFruits; ++i) {
       for (int j = 0; j < i; ++j) {
-        if (fruits[j].keepDistance(fruits[i], frameIndex)) {
+        int scoreIncrement = fruits[j].keepDistance(fruits[i], frameIndex);
+        if (scoreIncrement) {
+          score += scoreIncrement;
           ++popCount;
           ++lastPopCount;
-          if (i < numFruits - 1) {
-            fruits[i] = fruits[numFruits - 1];
+          if (fruits[j].flags & Fruit::deletable) {
+            if (j < numFruits - 1) {
+              fruits[j] = fruits[numFruits - 1];
+            }
+            --numFruits;
+            --j;
           }
-          --numFruits;
-          --i;
+          if (fruits[i].flags & Fruit::deletable) {
+            if (i < numFruits - 1) {
+              fruits[i] = fruits[numFruits - 1];
+            }
+            --numFruits;
+            --i;
+          }
         }
       }
     }
@@ -239,11 +258,16 @@ Fruit* FruitSim::simulate(int frameSeed, uint32_t frameIndex) {
 
 int FruitSim::findGroundedOutside(uint32_t frameIndex) {
   if (lastPopCount > 0) return -1;
+  Scalar maxY = -worldSizeY;
+  int found = -1;
   for (int i = 0; i < numFruits; ++i) {
     Fruit &f(fruits[i]);
-    if (f.bottomTouchFrame == frameIndex && f.pos.y < f.r) return i;
+    if (f.bottomTouchFrame == frameIndex && f.pos.y < f.r && maxY < f.pos.y) {
+      found = i;
+      maxY = f.pos.y;
+    }
   }
-  return -1;
+  return found;
 }
 
 bool FruitSim::addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {
@@ -256,6 +280,7 @@ bool FruitSim::addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed) {
   f.r = radii[f.rIndex];
   f.r2 = f.r * f.r;
   f.rotation = rand() & 65535;
+  f.flags = 0;
 
   if (x < f.r) x = f.r;
   if (x > worldSizeX - f.r) x = worldSizeX - f.r;

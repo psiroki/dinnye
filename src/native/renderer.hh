@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL/SDL.h>
+#include <SDL/SDL_ttf.h>
 #include <stdint.h>
 
 #include "../common/sim.hh"
@@ -41,10 +42,15 @@ struct PixelBuffer {
   }
 
   inline void operator=(SDL_Surface *s) {
-    width = s->w;
-    height = s->h;
-    pitch = s->pitch >> 2;
-    pixels = reinterpret_cast<uint32_t*>(s->pixels);
+    if (s) {
+      width = s->w;
+      height = s->h;
+      pitch = s->pitch >> 2;
+      pixels = reinterpret_cast<uint32_t*>(s->pixels);
+    } else {
+      width = height = pitch = 0;
+      pixels = nullptr;
+    }
   }
 };
 
@@ -83,15 +89,34 @@ public:
     }
   }
 
-  int reassign(ShadedSphere *newSphere, int newRadius);
+  int reassign(ShadedSphere *newSphere, int newRadius, bool outlier = false);
   void release();
-  SDL_Surface* withAngle(int newAngle, bool outlier = false);
+  SDL_Surface* withAngle(int newAngle);
 
 #ifdef DEBUG_VISUALIZATION
   int getInvalidationReason() {
     return invalidationReason;
   }
 #endif
+};
+
+class ScoreCache {
+  SDL_Surface *rendered;
+  int score;
+  TTF_Font *font;
+  bool dirty;
+
+  void freeSurface();
+public:
+  inline ScoreCache(): rendered(0), score(-1), font(0), dirty(false) { }
+  ~ScoreCache();
+
+  inline void setFont(TTF_Font *newFont) {
+    font = newFont;
+    dirty = true;
+  }
+
+  SDL_Surface* render(int newScore);
 };
 
 struct PlanetDefinition {
@@ -115,6 +140,8 @@ class FruitRenderer {
   Scalar offsetX;
   Scalar sizeX, sizeY;
   int fontSize;
+  TTF_Font *font;
+  ScoreCache scoreCache;
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
@@ -126,5 +153,5 @@ public:
     sizeY = sim.getWorldHeight();
   }
   void renderBackground(SDL_Surface *background);
-  void renderFruits(Fruit *fruits, int count, int selection, int outlierIndex, uint32_t frameIndex);
+  void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex);
 };

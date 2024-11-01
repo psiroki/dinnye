@@ -291,7 +291,12 @@ void Planets::start() {
   while (running) {
     if (!lost && frameCounter) {
       outlierIndex = sim.findGroundedOutside(frameCounter);
-      if (outlierIndex >= 0) lost = true;
+      if (outlierIndex >= 0) {
+        std::cout << "outlierIndex: " << outlierIndex << std::endl;
+        Fruit *f = sim.getFruits();
+        std::cout << static_cast<float>(f[outlierIndex].pos.y) << std::endl;
+        lost = true;
+      }
     }
     if (!lost) ++frameCounter;
     Timestamp frame;
@@ -362,7 +367,7 @@ void Planets::start() {
     Timestamp renderStart;
     SDL_BlitSurface(background, nullptr, screen, nullptr);
 
-    renderer.renderFruits(fruits, count + 1, next.radIndex, outlierIndex, frameCounter);
+    renderer.renderFruits(sim, count + 1, next.radIndex, outlierIndex, frameCounter);
 
     uint32_t renderMicros = renderStart.elapsedSeconds() * 1000000.0f;
     renderTime += renderMicros;

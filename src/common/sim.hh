@@ -176,8 +176,13 @@ struct Fixed {
 
 typedef Fixed Scalar;
 #else
+
 typedef float Scalar;
 #endif
+
+inline Scalar scalarAbs(const Scalar &s) {
+  return s < Scalar(0) ? -s : s;
+}
 
 struct Point {
   Scalar x, y;
@@ -236,7 +241,7 @@ struct Point {
 
 struct Fruit {
   enum FruitFlags {
-    touched = 1, sensor = 2,
+    touched = 1, sensor = 2, deletable = 4,
   };
 
   Point pos;
@@ -249,7 +254,7 @@ struct Fruit {
 
   void move(Scalar gravity);
   void roll();
-  bool keepDistance(Fruit &other, uint32_t frameIndex);
+  int keepDistance(Fruit &other, uint32_t frameIndex);
   void constrainInside(uint32_t frameIndex);
   bool touches(const Fruit &other) const;
 };
@@ -263,15 +268,25 @@ class FruitSim {
   int popCount;
   int lastPopCount;
   Scalar gravity;
+  int score;
 public:
   inline FruitSim() { }
 
-  inline int getNumFruits() {
+  inline int getNumFruits() const {
     return numFruits;
   }
 
-  inline void removeAllFruits() {
+  inline int getScore() const {
+    return score;
+  }
+
+  inline Fruit* getFruits() {
+    return fruits;
+  }
+
+  inline void newGame() {
     numFruits = 0;
+    score = 0;
   }
 
   Fruit* init(int worldSeed);
