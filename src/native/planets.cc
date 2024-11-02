@@ -113,8 +113,9 @@ SDL_Surface *initSDL(int width, int height) {
 }
 
 struct NextPlacement {
-  Scalar x;  // y is always 0
+  Scalar x;  // y is always -1
   Scalar xv;
+  Scalar zoom;
   int radIndex;
   int seed;
   bool valid;
@@ -149,7 +150,8 @@ struct NextPlacement {
 
   inline bool place(FruitSim &sim, int newSeed) {
     if (valid) {
-      sim.addFruit(x, -1.0f, radIndex, seed);
+      Scalar random = (Scalar(newSeed & 0xFF) - Scalar(128)) / Scalar(512);
+      sim.addFruit(x + random / zoom, -1.0f, radIndex, seed);
       reset(sim, newSeed);
       return true;
     } else {
@@ -270,7 +272,7 @@ void Planets::start() {
   SDL_SetAlpha(background, 0, 255);
   renderer.renderBackground(background);
 
-  NextPlacement next = { .x = 0.0f, .xv = 0.0f };
+  NextPlacement next = { .x = 0.0f, .xv = 0.0f, .zoom = zoom, };
   next.reset(sim, seed);
 
   ControlState controls;
@@ -291,12 +293,7 @@ void Planets::start() {
   while (running) {
     if (!lost && frameCounter) {
       outlierIndex = sim.findGroundedOutside(frameCounter);
-      if (outlierIndex >= 0) {
-        std::cout << "outlierIndex: " << outlierIndex << std::endl;
-        Fruit *f = sim.getFruits();
-        std::cout << static_cast<float>(f[outlierIndex].pos.y) << std::endl;
-        lost = true;
-      }
+      if (outlierIndex >= 0) lost = true;
     }
     if (!lost) ++frameCounter;
     Timestamp frame;

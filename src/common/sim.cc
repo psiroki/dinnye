@@ -180,7 +180,7 @@ void Fruit::constrainInside(uint32_t frameIndex) {
 
 Fruit* FruitSim::init(int worldSeed) {
 #ifdef SPEEDTESTING
-  numFruits = 256;
+  numFruits = 128;
   worldSeed = 7;
 #else
   numFruits = 0;

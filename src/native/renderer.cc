@@ -189,14 +189,11 @@ void ShadedSphere::render(PixelBuffer &target, int cx, int cy, int radius, int a
 }
 
 int SphereCache::reassign(ShadedSphere *newSphere, int newRadius, bool newOutlier) {
-  if (s == newSphere && radius == newRadius) return 0;
+  if (s == newSphere && radius == newRadius && outlier == newOutlier) return 0;
   int result = 1;
   s = newSphere;
-  if (outlier != newOutlier) {
+  if (radius != newRadius || outlier != newOutlier) {
     outlier = newOutlier;
-    dirty = true;
-  }
-  if (radius != newRadius) {
     radius = newRadius;
     if (cache) SDL_FreeSurface(cache);
     int extra = outlier ? 2 : 0;
@@ -585,7 +582,7 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
   if (scoreText) {
     SDL_Rect scorePos {
       .x = static_cast<Sint16>(static_cast<int>(offsetX-scoreText->w) >> 1),
-      .y = static_cast<Sint16>((planetDefs[0].y - scoreText->h) >> 1),
+      .y = static_cast<Sint16>((planetDefs[0].y * 7 / 8 - scoreText->h) >> 1),
     };
     SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
   }
