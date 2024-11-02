@@ -7,10 +7,12 @@
 class Timestamp {
   timespec time;
   static float secondsDiff(const timespec &a, const timespec &b);
+  static uint64_t microsDiff(const timespec &a, const timespec &b);
 public:
   Timestamp();
   void reset();
   void resetWithDelta(float deltaSeconds);
+  uint64_t elapsedMicros(bool reset = false);
   float elapsedSeconds(bool reset = false);
   float secondsTo(const Timestamp &other);
   inline const timespec& getTime() {

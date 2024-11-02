@@ -44,11 +44,29 @@ float Timestamp::secondsDiff(const timespec &then, const timespec &now) {
   }
 }
 
+uint64_t Timestamp::microsDiff(const timespec &then, const timespec &now) {
+  int32_t secDiff = now.tv_sec - then.tv_sec;
+  if (now.tv_nsec < then.tv_nsec) {
+    // like 1.8 to 2.4
+    --secDiff;  // secDiff becomes 0
+    return secDiff * static_cast<uint64_t>(1000000) + (1000000000L - then.tv_nsec + now.tv_nsec) / 1000;
+  } else {
+    return secDiff + (now.tv_nsec - then.tv_nsec) / 1000;
+  }
+}
+
 float Timestamp::elapsedSeconds(bool reset) {
   timespec then(time), now;
   clock_gettime(CLOCK_MONOTONIC, &now);
   if (reset) time = now;
   return secondsDiff(then, now);
+}
+
+uint64_t Timestamp::elapsedMicros(bool reset) {
+  timespec then(time), now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  if (reset) time = now;
+  return microsDiff(then, now);
 }
 
 float Timestamp::secondsTo(const Timestamp &other) {

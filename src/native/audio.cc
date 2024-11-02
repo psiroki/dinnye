@@ -121,7 +121,7 @@ void Mixer::audioCallback(uint8_t *stream, int len) {
   }
   if (cond) cond->notify();
   // add new channels
-  while (soundRead != soundWrite) {
+  while (soundRead != soundWrite && numChannelsUsed < maxNumChannels) {
     channels[numChannelsUsed++] = soundsToAdd[soundRead];
     soundRead = (soundRead + 1) & (soundQueueSize - 1);
   }

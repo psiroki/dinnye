@@ -6,6 +6,10 @@
 #include "image.hh"
 #include "roboto.hh"
 
+#ifdef BITTBOY
+#define USE_QUICKBLIT
+#endif
+
 const Scalar pi = Scalar(float(M_PI));
 
 // Uncomment this if the red and blue seems to be swapped
@@ -109,8 +113,8 @@ namespace {
     SDL_Surface *surface;
     PixelBuffer pb;
 
-    inline SurfaceLocker(SDL_Surface *surface): surface(surface), pb(nullptr) {
-      if (SDL_MUSTLOCK(surface)) {
+    inline SurfaceLocker(SDL_Surface *surface=nullptr): surface(surface), pb(nullptr) {
+      if (surface && SDL_MUSTLOCK(surface)) {
         SDL_LockSurface(surface);
       }
       pb = surface;
@@ -123,6 +127,16 @@ namespace {
         }
         pb = surface = nullptr;
       }
+    }
+
+    inline SDL_Surface* operator=(SDL_Surface *s) {
+      unlock();
+      surface = s;
+      if (surface && SDL_MUSTLOCK(surface)) {
+        SDL_LockSurface(surface);
+      }
+      pb = surface;
+      return surface;
     }
 
     inline ~SurfaceLocker() {
@@ -246,11 +260,9 @@ SDL_Surface* SphereCache::withAngle(int newAngle) {
     ++numCacheMisses;
     angle = newAngle;
 
-    if (SDL_MUSTLOCK(cache)) {
-      SDL_LockSurface(cache);
-    }
+    SurfaceLocker lock(cache);
 
-    PixelBuffer pb(cache);
+    PixelBuffer &pb(lock.pb);
     int offset = outlier ? 1 : 0;
     s->render(pb, radius+offset, radius+offset, radius, angle & 0xffff);
     if (outlier) {
@@ -278,9 +290,7 @@ SDL_Surface* SphereCache::withAngle(int newAngle) {
       }
     }
 
-    if (SDL_MUSTLOCK(cache)) {
-      SDL_UnlockSurface(cache);
-    }
+    lock.unlock();
     dirty = false;
   } else {
 #ifdef DEBUG_VISUALIZATION
@@ -575,6 +585,44 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
   lock.unlock();
 }
 
+void quickBlit(PixelBuffer src, PixelBuffer dst, int x, int y) {
+  int w = src.width;
+  int h = src.height;
+  uint32_t *s = src.pixels;
+  if (x < 0) {
+    w += x;
+    s -= x;
+    x = 0;
+  }
+  if (y < 0) {
+    h += y;
+    s -= y * src.pitch;
+    y = 0;
+  }
+  if (x + w > dst.width) {
+    w = dst.width - x;
+  }
+  if (y + h > dst.height) {
+    h = dst.height - y;
+  }
+  if (w <= 0 || h <= 0) return;
+  if (x < 0 || y < 0) {
+    return;
+  }
+  uint32_t *d = dst.pixels + x + y * dst.pitch;
+  for (int py = 0; py < h; ++py) {
+    uint32_t *dl = d;
+    uint32_t *sl = s;
+    for (int px = 0; px < w; ++px) {
+      uint32_t col = *sl++;
+     if (col) *dl = col;
+      ++dl;
+    }
+    d += dst.pitch;
+    s += src.pitch;
+  }
+}
+
 void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex) {
   Fruit *fruits = sim.getFruits();
   int score = sim.getScore();
@@ -595,10 +643,8 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       .w = 4,
       .h = static_cast<Uint16>(def.h * 6 / 8),
     };
-    if (SDL_MUSTLOCK(target)) {
-      SDL_LockSurface(target);
-    }
-    PixelBuffer pb(target);
+    SurfaceLocker targetLock(target);
+    PixelBuffer &pb(targetLock.pb);
     int bottom = rect.y + rect.h;
     int right = def.x << 2;
     for (int y = rect.y; y < bottom; ++y) {
@@ -610,9 +656,7 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
         line[x] = 0xFFFFFFFF - ablend(col, red);
       }
     }
-    if (SDL_MUSTLOCK(target)) {
-      SDL_UnlockSurface(target);
-    }
+    targetLock.unlock();
   }
 
   int bottom = target->h;
@@ -635,6 +679,9 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
     }
   }
 
+#ifdef USE_QUICKBLIT
+  SurfaceLocker sl(target);
+#endif
   // Render playfield
   int32_t above[fruitCap];
   int numAbove = 0;
@@ -664,11 +711,18 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       if (screenY < -32768) screenY = -32768;
       above[numAbove++] = screenY << 16 | (screenX & 0xFFFF);
     } else {
+#ifdef USE_QUICKBLIT
+      quickBlit(s, sl.pb, screenX, screenY);
+#else
       dst.x = static_cast<Sint16>(screenX);
       dst.y = static_cast<Sint16>(screenY);
       SDL_BlitSurface(s, nullptr, target, &dst);
+#endif
     }
   }
+#ifdef USE_QUICKBLIT
+  sl.unlock();
+#endif
 
   if (numAbove) {
     SurfaceLocker lock(target);

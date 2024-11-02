@@ -58,9 +58,9 @@ struct MixChannel {
 };
 
 class Mixer {
-  static const int maxNumChannels = 16;
-  static const int soundQueueSize = 16;
-  static const int donePlayingQueueSize = 64;
+  static const int maxNumChannels = 64;
+  static const int soundQueueSize = 64;
+  static const int donePlayingQueueSize = 128;
 
   uint32_t playIdCounter;
   uint64_t audioTime[4];
@@ -76,7 +76,7 @@ class Mixer {
   int donePlayingWrite;
   Mutex playLock;
 public:
-  inline Mixer(): audioTime { 0, 0, 0, 0 }, currentTimes(0), soundRead(0), soundWrite(0), donePlayingRead(0), donePlayingWrite(0), numChannelsUsed(0) { }
+  inline Mixer(): audioTime { 0, 0, 0, 0 }, currentTimes(0), soundRead(0), soundWrite(0), donePlayingRead(0), donePlayingWrite(0), numChannelsUsed(0), playIdCounter(0) { }
   void audioCallback(uint8_t *stream, int len);
   uint32_t playSound(const SoundBufferView *buffer);
   uint32_t playSoundAt(const SoundBufferView *buffer, uint32_t at);
@@ -86,6 +86,9 @@ public:
   inline uint64_t getAudioTimeNow() {
     int w = currentTimes;
     return audioTime[w] + times[w].elapsedSeconds() * 44100;
+  }
+  inline uint32_t getNumChannelsUsed() const {
+    return numChannelsUsed;
   }
   /// Returns the next playId that has just finished, or 0
   /// if no more are available (0 will never be used as an id)

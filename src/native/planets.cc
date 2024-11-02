@@ -355,7 +355,7 @@ void Planets::start() {
 
     next.setupPreview(sim);
     if (!lost) {
-      uint32_t simMicros = simStart.elapsedSeconds() * 1000000.0f;
+      uint32_t simMicros = simStart.elapsedMicros();
       simTime += simMicros;
       if (simMicros > maxSimTime) maxSimTime = simMicros;
       simTimeHistogram.add(simMicros/100);
@@ -366,7 +366,7 @@ void Planets::start() {
 
     renderer.renderFruits(sim, count + 1, next.radIndex, outlierIndex, frameCounter);
 
-    uint32_t renderMicros = renderStart.elapsedSeconds() * 1000000.0f;
+    uint32_t renderMicros = renderStart.elapsedMicros();
     renderTime += renderMicros;
     if (renderMicros > maxRenderTime) maxRenderTime = renderMicros;
     renderTimeHistogram.add(renderMicros/100);
@@ -374,12 +374,12 @@ void Planets::start() {
     // Update the screen
     SDL_Flip(screen);
 
-    uint32_t frameMicros = frame.elapsedSeconds() * 1000000.0f;
+    uint32_t frameMicros = frame.elapsedMicros();
     frameTimeHistogram.add(frameMicros/100);
 
 #ifndef BITTBOY
     // Cap the frame rate to ~100 FPS
-    int millisToWait = 10 - frame.elapsedSeconds()*1000.0f;
+    int millisToWait = 10 - frame.elapsedMicros()/1000;
     if (millisToWait > 0) SDL_Delay(millisToWait);
 #endif
   }
