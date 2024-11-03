@@ -98,7 +98,7 @@ void renderSphereLightmap(PixelBuffer &pb) {
       if (alpha == 0) gray = 0;
 
       // Set the pixel color
-      line[x] = (alpha << 24) | (gray << 16) << (gray << 8) | gray;
+      line[x] = (alpha << 24) | (gray << 16) | (gray << 8) | gray;
     }
     dst += pb.pitch;
   }
@@ -496,6 +496,8 @@ FruitRenderer::~FruitRenderer() {
   textures = nullptr;
   numTextures = 0;
   delete[] shading;
+  delete[] sphereDefs;
+  sphereDefs = nullptr;
 }
 
 void FruitRenderer::renderBackground(SDL_Surface *background) {
@@ -709,7 +711,7 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
     int screenY = f.pos.y * zoom - radius + top;
     if (screenY < -s->h) {
       if (screenY < -32768) screenY = -32768;
-      above[numAbove++] = screenY << 16 | (screenX & 0xFFFF);
+      above[numAbove++] = static_cast<uint32_t>(screenY) << 16 | (screenX & 0xFFFF);
     } else {
 #ifdef USE_QUICKBLIT
       quickBlit(s, sl.pb, screenX, screenY);

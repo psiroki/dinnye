@@ -144,7 +144,7 @@ void Mixer::audioCallback(uint8_t *stream, int len) {
       if (mix[k] > 32767) mix[k] = 32767;
       if (mix[k] < -32768) mix[k] = -32768;
     }
-    *s++ = (mix[1] << 16) | (mix[0] & 0xffff);
+    *s++ = (static_cast<uint32_t>(mix[1]) << 16) | (mix[0] & 0xffff);
     ++time;
   }
 }

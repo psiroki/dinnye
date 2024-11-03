@@ -39,6 +39,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined,address")
+endif()
+
 # Define directories containing source code
 set(SRC_COMMON_DIR src/common)
 set(SRC_NATIVE_DIR src/native)

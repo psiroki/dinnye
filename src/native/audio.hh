@@ -53,7 +53,7 @@ struct MixChannel {
   uint64_t timeStart;
 
   bool isOver(uint64_t audioTime) {
-    return !buffer || timeStart < audioTime && (timeStart + buffer->numSamples) < audioTime;
+    return !buffer || timeStart < audioTime && (timeStart + buffer->numSamples) <= audioTime;
   }
 };
 

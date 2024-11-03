@@ -8,6 +8,7 @@ namespace {
 #ifdef FIXED
   Fixed rsqrt(Fixed f) {
     uint32_t n = f.f;
+    if (!n) return f;
     int bits = 32 - __builtin_clz(n);
     int newBits = 16-((bits-16) >> 1);
     uint32_t y = ((n-(1 << bits-1))>>1)+((bits&1^1) << bits-1);

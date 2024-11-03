@@ -23,7 +23,8 @@ struct TimeHistogram {
   TimeHistogram(): counts { } { }
 
   void add(uint32_t value) {
-    if (value > sizeof(counts)) value = sizeof(counts) - 1;
+    const uint32_t numCounts = sizeof(counts) / sizeof(*counts);
+    if (value >= numCounts) value = numCounts - 1;
     ++counts[value];
   }
 };
@@ -205,7 +206,7 @@ void Planets::start() {
 
   for (int i = 0; i < drop.numSamples; ++i) {
     int32_t sample = bitExtend(drop.samples[i] & 0xFFFF) >> 2;
-    drop.samples[i] = sample | (sample << 16);
+    drop.samples[i] = sample | (static_cast<uint32_t>(sample) << 16);
   }
 
   for (int i = 0; i < pop.numSamples; ++i) {
