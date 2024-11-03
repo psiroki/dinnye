@@ -492,6 +492,10 @@ FruitRenderer::~FruitRenderer() {
       textures[i] = nullptr;
     }
   }
+  for (int i = 0; i < numRadii; ++i) {
+    SDL_Surface *s = planetDefs[i].nameText;
+    if (s) SDL_FreeSurface(s);
+  }
   delete[] textures;
   textures = nullptr;
   numTextures = 0;
@@ -578,10 +582,37 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
       line[x] = ablend(line[x], 0x80);
     }
   }
+#ifdef BITTBOY
+  Random noise(1337);
+#endif
   for (int y = 0; y < pb.height; ++y) {
     uint32_t *line = pb.pixels + y * pb.pitch;
     for (int x = 0; x < pb.width; ++x) {
-      line[x] = line[x] & 0xFFFFFFu;
+      uint32_t col = line[x] & 0xFFFFFFu;
+#ifdef BITTBOY
+      uint32_t ncol = 0;
+      for (int i = 0; i < 3; ++i) {
+        int ch = (col >> (i * 8)) & 0xff;
+        int n = noise()&7;
+        switch (n) {
+          case 0: n = 0; break;
+          case 1: n = 1; break;
+          case 2: n = 2; break;
+          case 3: n = 3; break;
+          case 4: n = 2; break; // Higher probability for 2
+          case 5: n = 3; break; // Higher probability for 3
+          case 6: n = 4; break;
+          case 7: n = 4; break; // Higher probability for 4
+          default: n = 0; break; // Safeguard
+        }
+        ch += (n) - 2;
+        if (ch < 0) ch = 0;
+        if (ch > 255) ch = 255;
+        ncol |= ch << (i * 8);
+      }
+      col = ncol;
+#endif
+      line[x] = col;
     }
   }
   lock.unlock();

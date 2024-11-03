@@ -25,14 +25,16 @@ if(SPEEDTESTING)
   add_definitions(-DSPEEDTESTING)
 endif()
 
-if(BITTBOY)
-  message(STATUS "Building for BittBoy")
-  add_definitions(-DBITTBOY)
-endif()
-
 if(DEBUG_VISUALIZATION)
   message(STATUS "Debug visualization on")
   add_definitions(-DDEBUG_VISUALIZATION)
+endif()
+
+if(BITTBOY)
+  message(STATUS "Building for BittBoy")
+  add_definitions(-DBITTBOY)
+else()
+  add_definitions(-DDESKTOP)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

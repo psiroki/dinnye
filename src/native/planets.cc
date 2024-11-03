@@ -72,6 +72,7 @@ const int dropOffset = 4953;
 
 struct ControlState {
   bool controlState[static_cast<int>(Control::LAST_ITEM)];
+  bool prevControlState[static_cast<int>(Control::LAST_ITEM)];
 
   inline bool& operator [](int index) {
     return controlState[index];
@@ -79,6 +80,15 @@ struct ControlState {
 
   inline bool& operator [](Control control) {
     return controlState[static_cast<int>(control)];
+  }
+
+  inline bool pressedDown(Control control) const {
+    int index = static_cast<int>(control);
+    return controlState[index] && !prevControlState[index];
+  }
+
+  inline void flush() {
+    memcpy(&prevControlState, &controlState, sizeof(controlState));
   }
 };
 
@@ -176,7 +186,7 @@ void Planets::callAudioCallback(void *userData, uint8_t *stream, int len) {
 void Planets::start() {
 #ifdef BITTBOY
 #pragma message "BittBoy build"
-  SDL_Surface *screen = initSDL(320, 240);
+  SDL_Surface *screen = initSDL(0, 0);
   SDL_ShowCursor(false);
 #else
   SDL_Surface *screen = initSDL(640, 480);
@@ -276,9 +286,7 @@ void Planets::start() {
   NextPlacement next = { .x = 0.0f, .xv = 0.0f, .zoom = zoom, };
   next.reset(sim, seed);
 
-  ControlState controls;
-  memset(&controls, 0, sizeof(controls));
-  bool placed = false;
+  ControlState controls { };
   uint32_t simTime = 0;
   uint32_t renderTime = 0;
   uint32_t frameCounter = 0;
@@ -299,9 +307,9 @@ void Planets::start() {
     if (!lost) ++frameCounter;
     Timestamp frame;
     // Event handling
+    controls.flush();
     while (SDL_PollEvent(&event)) {
-      if (event.type == SDL_QUIT || 
-        (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)) {
+      if (event.type == SDL_QUIT) {
         running = false;
       }
       if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
@@ -314,10 +322,25 @@ void Planets::start() {
             c = Control::RIGHT;
             break;
           case SDLK_SPACE:
+            c = Control::NORTH;
+            break;
+          case SDLK_LCTRL:
             c = Control::EAST;
+            break;
+          case SDLK_LALT:
+            c = Control::SOUTH;
+            break;
+          case SDLK_LSHIFT:
+            c = Control::WEST;
             break;
           case SDLK_RETURN:
             c = Control::START;
+            break;
+          case SDLK_ESCAPE:
+            c = Control::SELECT;
+            break;
+          case SDLK_RCTRL:
+            c = Control::MENU;
             break;
         }
         controls[c] = event.type == SDL_KEYDOWN;
@@ -331,15 +354,29 @@ void Planets::start() {
       }
     }
 
+    if (controls.pressedDown(Control::START)) {
+      sim.newGame();
+    }
+
+#ifdef DESKTOP
+    if (controls[Control::SELECT]) {
+#else
+    if (controls[Control::MENU]) {
+#endif
+      running = false;
+    }
+
     if (!lost) {
       if (controls[Control::LEFT]) next.xv -= 0.01f;
       if (controls[Control::RIGHT]) next.xv += 0.01f;
-      if (!placed && (controls[Control::EAST] || controls[Control::SOUTH])) {
-        if (next.place(sim, frame.getTime().tv_nsec))
-          mixer.playSound(&drop);
-        placed = true;
-      } else if (!(controls[Control::EAST] || controls[Control::SOUTH])) {
-        placed = false;
+      Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
+      for (int i = 0; i < sizeof(drops)/sizeof(*drops); ++i) {
+        if (controls.pressedDown(drops[i])) {
+          if (next.place(sim, frame.getTime().tv_nsec)) {
+            mixer.playSound(&drop);
+          }
+          break;
+        }
       }
     }
 
@@ -420,6 +457,8 @@ void Planets::start() {
 #endif
 
   music.stopThread();
+
+  SDL_FreeSurface(background);
 
   SDL_Quit();
 }

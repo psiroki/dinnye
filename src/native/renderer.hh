@@ -81,16 +81,14 @@ public:
   static int numCacheReassignMisses;
 
   inline SphereCache(): s(nullptr), cache(nullptr), radius(0), angle(0), dirty(false) { }
-  
+
+  void release();
+
   inline ~SphereCache() {
-    if (cache) {
-      SDL_FreeSurface(cache);
-      cache = nullptr;
-    }
+    release();
   }
 
   int reassign(ShadedSphere *newSphere, int newRadius, bool outlier = false);
-  void release();
   SDL_Surface* withAngle(int newAngle);
 
 #ifdef DEBUG_VISUALIZATION

@@ -41,32 +41,6 @@ namespace {
     return y;
   }
 #endif
-
-  static uint64_t nextSeed(uint64_t seed) {
-    return (seed * 0x5DEECE66DLL + 0xBLL) & ((1LL << 48) - 1);
-  }
-
-  static float seedToFloat(uint64_t seed) {
-    return (seed & 0xffffff) / static_cast<float>(0xffffff);
-  }
-
-  class Random {
-    uint64_t seed;
-  public:
-    Random(uint64_t seed): seed(nextSeed(seed)) {}
-
-    uint64_t operator()() {
-      return seed = nextSeed(seed);
-    }
-
-    uint64_t operator()(int n) {
-      return (seed = nextSeed(seed)) % n;
-    }
-
-    float fraction() {
-      return seedToFloat(seed = nextSeed(seed));
-    }
-  };
 }
 
 float radii[numRadii];
