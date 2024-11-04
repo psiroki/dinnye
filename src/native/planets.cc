@@ -172,15 +172,113 @@ struct NextPlacement {
 };
 
 class Planets {
+  FruitSim sim;
   SDL_Surface *screen;
   Mixer mixer;
+  SoundBuffer allSounds;
+  SoundBufferView pop;
+  SoundBufferView drop;
+  SDL_AudioSpec desiredAudioSpec;
+  SDL_AudioSpec actualAudioSpec;
+  AutoDelete<ThreadedFdaStreamer> music;
+  AutoDelete<FruitRenderer> renderer;
+  SDL_Surface *background;
+  NextPlacement next;
+  ControlState controls;
+  Scalar zoom;
+  Scalar rightAligned;
+  Scalar centered;
+  Scalar offsetX;
+  bool running;
+  bool lost;
+
   static void callAudioCallback(void *userData, uint8_t *stream, int len);
 public:
+  Planets(): next { .x = 0.0f, .xv = 0.0f, }, controls { } { }
   void start();
+  void processInput(const Timestamp &frame);
 };
 
 void Planets::callAudioCallback(void *userData, uint8_t *stream, int len) {
   reinterpret_cast<Planets*>(userData)->mixer.audioCallback(stream, len);
+}
+
+void Planets::processInput(const Timestamp &frame) {
+  // Event handling
+  controls.flush();
+
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_QUIT) {
+      running = false;
+    }
+    if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+      Control c = Control::UNMAPPED;
+      switch (event.key.keysym.sym) {
+        case SDLK_LEFT:
+          c = Control::LEFT;
+          break;
+        case SDLK_RIGHT:
+          c = Control::RIGHT;
+          break;
+        case SDLK_SPACE:
+          c = Control::NORTH;
+          break;
+        case SDLK_LCTRL:
+          c = Control::EAST;
+          break;
+        case SDLK_LALT:
+          c = Control::SOUTH;
+          break;
+        case SDLK_LSHIFT:
+          c = Control::WEST;
+          break;
+        case SDLK_RETURN:
+          c = Control::START;
+          break;
+        case SDLK_ESCAPE:
+          c = Control::SELECT;
+          break;
+        case SDLK_RCTRL:
+          c = Control::MENU;
+          break;
+      }
+      controls[c] = event.type == SDL_KEYDOWN;
+    }
+    if (!lost && event.type == SDL_MOUSEMOTION) {
+      next.x = (event.motion.x - offsetX) / zoom;
+      next.constrainInside(sim);
+    }
+    if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
+      controls[Control::EAST] = event.button.state;
+    }
+  }
+
+  if (controls.pressedDown(Control::START)) {
+    sim.newGame();
+  }
+
+#ifdef DESKTOP
+  if (controls[Control::SELECT]) {
+#else
+  if (controls[Control::MENU]) {
+#endif
+    running = false;
+  }
+
+  if (!lost) {
+    if (controls[Control::LEFT]) next.xv -= 0.01f;
+    if (controls[Control::RIGHT]) next.xv += 0.01f;
+    Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
+    for (int i = 0; i < sizeof(drops)/sizeof(*drops); ++i) {
+      if (controls.pressedDown(drops[i])) {
+        if (next.place(sim, frame.getTime().tv_nsec)) {
+          mixer.playSound(&drop);
+        }
+        break;
+      }
+    }
+  }
 }
 
 void Planets::start() {
@@ -193,7 +291,6 @@ void Planets::start() {
 #endif
   if (!screen) return;
 
-  SoundBuffer allSounds;
   allSounds.resize(10886);
   std::ifstream file("assets/sounds.dat", std::ios::binary);
 
@@ -211,8 +308,8 @@ void Planets::start() {
     memset(allSounds.samples, 0, allSounds.numSamples*sizeof(*allSounds.samples));
   }
 
-  SoundBufferView pop(allSounds, 0, dropOffset);
-  SoundBufferView drop(allSounds, dropOffset);
+  SoundBufferView pop = SoundBufferView(allSounds, 0, dropOffset);
+  SoundBufferView drop = SoundBufferView(allSounds, dropOffset);
 
   for (int i = 0; i < drop.numSamples; ++i) {
     int32_t sample = bitExtend(drop.samples[i] & 0xFFFF) >> 2;
@@ -224,8 +321,6 @@ void Planets::start() {
     pop.samples[i] = sample | (sample << 16);
   }
 
-  SDL_AudioSpec desiredAudioSpec;
-  SDL_AudioSpec actualAudioSpec;
   desiredAudioSpec.freq = 44100;
   desiredAudioSpec.format = AUDIO_S16;
   desiredAudioSpec.channels = 2;
@@ -248,14 +343,12 @@ void Planets::start() {
   std::cerr << "Starting audio" << std::endl;
   SDL_PauseAudio(0);
 
-  ThreadedFdaStreamer music(mixer, "assets/wiggle-until-you-giggle.fda");
-  music.startThread();
+  music = new ThreadedFdaStreamer(mixer, "assets/wiggle-until-you-giggle.fda");
+  music->startThread();
 
-  bool running = true;
-  SDL_Event event;
+  running = true;
 
-  FruitRenderer renderer(screen);
-  FruitSim sim;
+  renderer = new FruitRenderer(screen);
 
   timespec time;
   clock_gettime(CLOCK_MONOTONIC, &time);
@@ -264,12 +357,13 @@ void Planets::start() {
   sim.init(seed);
   sim.setGravity(0.0078125f * 0.5f);
 
-  const Scalar zoom = screen->h / (sim.getWorldHeight() + Scalar(2));
-  const Scalar rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
-  const Scalar centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
-  const Scalar offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
-  renderer.setLayout(zoom, offsetX, sim);
-  SDL_Surface *background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
+  zoom = screen->h / (sim.getWorldHeight() + Scalar(2));
+  rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
+  centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
+  offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
+
+  renderer->setLayout(zoom, offsetX, sim);
+  background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
   SDL_Surface *backgroundScreen = SDL_DisplayFormat(screen);
   if (background->w < backgroundScreen->w || background->h < backgroundScreen->h)
     SDL_FillRect(backgroundScreen, nullptr, 0);
@@ -281,12 +375,11 @@ void Planets::start() {
   SDL_FreeSurface(background);
   background = backgroundScreen;
   SDL_SetAlpha(background, 0, 255);
-  renderer.renderBackground(background);
+  renderer->renderBackground(background);
 
-  NextPlacement next = { .x = 0.0f, .xv = 0.0f, .zoom = zoom, };
+  next.zoom = zoom;
   next.reset(sim, seed);
 
-  ControlState controls { };
   uint32_t simTime = 0;
   uint32_t renderTime = 0;
   uint32_t frameCounter = 0;
@@ -295,7 +388,7 @@ void Planets::start() {
   TimeHistogram renderTimeHistogram;
   TimeHistogram simTimeHistogram;
   TimeHistogram frameTimeHistogram;
-  bool lost = false;
+  lost = false;
   Fruit *fruits;
   int outlierIndex = -1;
 
@@ -306,79 +399,8 @@ void Planets::start() {
     }
     if (!lost) ++frameCounter;
     Timestamp frame;
-    // Event handling
-    controls.flush();
-    while (SDL_PollEvent(&event)) {
-      if (event.type == SDL_QUIT) {
-        running = false;
-      }
-      if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-        Control c = Control::UNMAPPED;
-        switch (event.key.keysym.sym) {
-          case SDLK_LEFT:
-            c = Control::LEFT;
-            break;
-          case SDLK_RIGHT:
-            c = Control::RIGHT;
-            break;
-          case SDLK_SPACE:
-            c = Control::NORTH;
-            break;
-          case SDLK_LCTRL:
-            c = Control::EAST;
-            break;
-          case SDLK_LALT:
-            c = Control::SOUTH;
-            break;
-          case SDLK_LSHIFT:
-            c = Control::WEST;
-            break;
-          case SDLK_RETURN:
-            c = Control::START;
-            break;
-          case SDLK_ESCAPE:
-            c = Control::SELECT;
-            break;
-          case SDLK_RCTRL:
-            c = Control::MENU;
-            break;
-        }
-        controls[c] = event.type == SDL_KEYDOWN;
-      }
-      if (!lost && event.type == SDL_MOUSEMOTION) {
-        next.x = (event.motion.x - offsetX) / zoom;
-        next.constrainInside(sim);
-      }
-      if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
-        controls[Control::EAST] = event.button.state;
-      }
-    }
 
-    if (controls.pressedDown(Control::START)) {
-      sim.newGame();
-    }
-
-#ifdef DESKTOP
-    if (controls[Control::SELECT]) {
-#else
-    if (controls[Control::MENU]) {
-#endif
-      running = false;
-    }
-
-    if (!lost) {
-      if (controls[Control::LEFT]) next.xv -= 0.01f;
-      if (controls[Control::RIGHT]) next.xv += 0.01f;
-      Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
-      for (int i = 0; i < sizeof(drops)/sizeof(*drops); ++i) {
-        if (controls.pressedDown(drops[i])) {
-          if (next.place(sim, frame.getTime().tv_nsec)) {
-            mixer.playSound(&drop);
-          }
-          break;
-        }
-      }
-    }
+    processInput(frame);
 
     Timestamp simStart;
     if (!lost) next.step(sim);
@@ -402,7 +424,7 @@ void Planets::start() {
     Timestamp renderStart;
     SDL_BlitSurface(background, nullptr, screen, nullptr);
 
-    renderer.renderFruits(sim, count + 1, next.radIndex, outlierIndex, frameCounter);
+    renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, frameCounter);
 
     uint32_t renderMicros = renderStart.elapsedMicros();
     renderTime += renderMicros;
@@ -456,7 +478,7 @@ void Planets::start() {
   }
 #endif
 
-  music.stopThread();
+  music->stopThread();
 
   SDL_FreeSurface(background);
 

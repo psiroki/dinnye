@@ -4,6 +4,70 @@
 #include <pthread.h>
 #include <stdint.h>
 
+template<typename T> class AutoDeleteArray {
+  T* ptr;
+  
+  void release() {
+    if (ptr) delete[] ptr;
+    ptr = nullptr;
+  }
+public:
+  AutoDeleteArray(T* ptr = nullptr): ptr(ptr) { }
+  ~AutoDeleteArray() {
+    release();
+  }
+
+  T* asPointer() {
+    return ptr;
+  }
+
+  operator T*() {
+    return ptr;
+  }
+
+  T* operator->() {
+    return ptr;
+  }
+
+  T* operator=(T* newVal) {
+    if (ptr == newVal) return newVal;
+    release();
+    return ptr = newVal;
+  }
+};
+
+template<typename T> class AutoDelete {
+  T* ptr;
+  
+  void release() {
+    if (ptr) delete ptr;
+    ptr = nullptr;
+  }
+public:
+  AutoDelete(T* ptr = nullptr): ptr(ptr) { }
+  ~AutoDelete() {
+    release();
+  }
+
+  T* asPointer() {
+    return ptr;
+  }
+
+  operator T*() {
+    return ptr;
+  }
+
+  T* operator->() {
+    return ptr;
+  }
+
+  T* operator=(T* newVal) {
+    if (ptr == newVal) return newVal;
+    release();
+    return ptr = newVal;
+  }
+};
+
 class Timestamp {
   timespec time;
   static float secondsDiff(const timespec &a, const timespec &b);
@@ -15,7 +79,7 @@ public:
   uint64_t elapsedMicros(bool reset = false);
   float elapsedSeconds(bool reset = false);
   float secondsTo(const Timestamp &other);
-  inline const timespec& getTime() {
+  inline const timespec& getTime() const {
     return time;
   }
 };

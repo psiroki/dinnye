@@ -2,28 +2,6 @@
 #include "audio.hh"
 #include <string.h>
 
-template<typename T> class AutoDeleteArray {
-  T* ptr;
-public:
-  AutoDeleteArray(T* ptr): ptr(ptr) { }
-  ~AutoDeleteArray() {
-    delete[] ptr;
-    ptr = nullptr;
-  }
-
-  T* asPointer() {
-    return ptr;
-  }
-
-  operator T*() {
-    return ptr;
-  }
-
-  T* operator->() {
-    return ptr;
-  }
-};
-
 StreamedFile::StreamedFile(const char *filename): filename(filename), bufferOffset(0) {
   stream.open(filename, std::ios::binary);
   stream.seekg(0, std::ios::end);
