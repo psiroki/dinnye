@@ -125,6 +125,8 @@ struct PlanetDefinition {
   int w, h;
 };
 
+void blur(SDL_Surface *s);
+
 class FruitRenderer {
   SDL_Surface **textures;
   PlanetDefinition planetDefs[numRadii];

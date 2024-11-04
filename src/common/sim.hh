@@ -319,8 +319,8 @@ public:
   Fruit* simulate(int frameSeed, uint32_t frameIndex);
   bool addFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed);
   Fruit* previewFruit(Scalar x, Scalar y, unsigned radiusIndex, int seed);
-  inline void setGravity(float newValue) {
-    gravity = Scalar(newValue);
+  inline void setGravity(Scalar newValue) {
+    gravity = newValue;
   }
   int findGroundedOutside(uint32_t frameIndex);
   Scalar getWorldWidth() const;

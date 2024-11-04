@@ -36,6 +36,13 @@ inline uint64_t unpackColor(uint32_t col) {
       col & 0xffULL);
 }
 
+inline uint32_t packColor(uint64_t v) {
+	return ((v >> 24) & 0xff000000u) |
+    ((v >> 16) & 0xff0000u) |
+		((v >> 8) & 0xff00u) |
+		(v & 0xffu);
+}
+
 inline uint32_t ablend(uint32_t col, uint8_t alpha) {
 	uint64_t v = unpackColor(col) * alpha;
 	return ((v >> 32) & 0xff000000u) |
@@ -357,6 +364,35 @@ SDL_Surface* ScoreCache::render(int newScore) {
     rendered = TTF_RenderText_Blended(font, s, SDL_Color{255, 255, 255});
   }
   return rendered;
+}
+
+void blur(SDL_Surface *s) {
+  SurfaceLocker lock(s);
+  PixelBuffer &pb(lock.pb);
+  for (int y = pb.height - 1; y >= 0; --y) {
+    uint32_t *line = pb.pixels + pb.pitch * y;
+    if (y) {
+      for (int x = pb.width - 1; x >= 0; --x) {
+        uint64_t c = unpackColor(line[x]);
+        c += unpackColor(line[x - pb.pitch]);
+        if (x > 0) {
+          c += unpackColor(line[x - 1]);
+          c += unpackColor(line[x - pb.pitch - 1]);
+          c >>= 2;
+        } else {
+          c >>= 1;
+        }
+        line[x] = packColor(c);
+      }
+    } else {
+      for (int x = 1; x < pb.width; ++x) {
+        uint64_t c = unpackColor(line[x]);
+        c += unpackColor(line[x - 1]);
+        c >>= 1;
+        line[x] = packColor(c);
+      }
+    }
+  }
 }
 
 FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0) {

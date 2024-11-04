@@ -82,7 +82,7 @@ struct ControlState {
     return controlState[static_cast<int>(control)];
   }
 
-  inline bool pressedDown(Control control) const {
+  inline bool justPressed(Control control) const {
     int index = static_cast<int>(control);
     return controlState[index] && !prevControlState[index];
   }
@@ -171,9 +171,14 @@ struct NextPlacement {
   }
 };
 
+enum class GameState { game, menu };
+
 class Planets {
+  GameState state;
   FruitSim sim;
   SDL_Surface *screen;
+  SDL_Surface *background;
+  SDL_Surface *snapshot;
   Mixer mixer;
   SoundBuffer allSounds;
   SoundBufferView pop;
@@ -182,30 +187,56 @@ class Planets {
   SDL_AudioSpec actualAudioSpec;
   AutoDelete<ThreadedFdaStreamer> music;
   AutoDelete<FruitRenderer> renderer;
-  SDL_Surface *background;
   NextPlacement next;
   ControlState controls;
   Scalar zoom;
   Scalar rightAligned;
   Scalar centered;
   Scalar offsetX;
+
+  int outlierIndex;
+
+  uint32_t seed;
+  uint32_t simTime;
+  uint32_t renderTime;
+  uint32_t frameCounter;
+  uint32_t maxSimTime;
+  uint32_t maxRenderTime;
+  TimeHistogram renderTimeHistogram;
+  TimeHistogram simTimeHistogram;
+  TimeHistogram frameTimeHistogram;
+
   bool running;
   bool lost;
 
   static void callAudioCallback(void *userData, uint8_t *stream, int len);
+
+  GameState processInput(const Timestamp &frame);
+  void initAudio();
+  void simulate();
+  void renderGame();
 public:
-  Planets(): next { .x = 0.0f, .xv = 0.0f, }, controls { } { }
+  Planets():
+      next { .x = 0.0f, .xv = 0.0f, },
+      controls { },
+      state(GameState::game),
+      outlierIndex(-1),
+      simTime(0),
+      renderTime(0),
+      frameCounter(0),
+      maxSimTime(0),
+      maxRenderTime(0) { }
   void start();
-  void processInput(const Timestamp &frame);
 };
 
 void Planets::callAudioCallback(void *userData, uint8_t *stream, int len) {
   reinterpret_cast<Planets*>(userData)->mixer.audioCallback(stream, len);
 }
 
-void Planets::processInput(const Timestamp &frame) {
+GameState Planets::processInput(const Timestamp &frame) {
   // Event handling
   controls.flush();
+  GameState nextState = state;
 
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
@@ -254,16 +285,24 @@ void Planets::processInput(const Timestamp &frame) {
     }
   }
 
-  if (controls.pressedDown(Control::START)) {
+  if (controls.justPressed(Control::START)) {
     sim.newGame();
   }
 
 #ifdef DESKTOP
-  if (controls[Control::SELECT]) {
+  if (controls.justPressed(Control::SELECT)) {
 #else
-  if (controls[Control::MENU]) {
+  if (controls.justPressed(Control::MENU)) {
 #endif
-    running = false;
+    switch (state) {
+      case GameState::game:
+        nextState = GameState::menu;
+        break;
+      case GameState::menu:
+        nextState = GameState::game;
+        running = false;
+        break;
+    }
   }
 
   if (!lost) {
@@ -271,7 +310,7 @@ void Planets::processInput(const Timestamp &frame) {
     if (controls[Control::RIGHT]) next.xv += 0.01f;
     Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
     for (int i = 0; i < sizeof(drops)/sizeof(*drops); ++i) {
-      if (controls.pressedDown(drops[i])) {
+      if (controls.justPressed(drops[i])) {
         if (next.place(sim, frame.getTime().tv_nsec)) {
           mixer.playSound(&drop);
         }
@@ -279,18 +318,11 @@ void Planets::processInput(const Timestamp &frame) {
       }
     }
   }
+
+  return nextState;
 }
 
-void Planets::start() {
-#ifdef BITTBOY
-#pragma message "BittBoy build"
-  SDL_Surface *screen = initSDL(0, 0);
-  SDL_ShowCursor(false);
-#else
-  SDL_Surface *screen = initSDL(640, 480);
-#endif
-  if (!screen) return;
-
+void Planets::initAudio() {
   allSounds.resize(10886);
   std::ifstream file("assets/sounds.dat", std::ios::binary);
 
@@ -308,8 +340,8 @@ void Planets::start() {
     memset(allSounds.samples, 0, allSounds.numSamples*sizeof(*allSounds.samples));
   }
 
-  SoundBufferView pop = SoundBufferView(allSounds, 0, dropOffset);
-  SoundBufferView drop = SoundBufferView(allSounds, dropOffset);
+  pop = SoundBufferView(allSounds, 0, dropOffset);
+  drop = SoundBufferView(allSounds, dropOffset);
 
   for (int i = 0; i < drop.numSamples; ++i) {
     int32_t sample = bitExtend(drop.samples[i] & 0xFFFF) >> 2;
@@ -345,6 +377,53 @@ void Planets::start() {
 
   music = new ThreadedFdaStreamer(mixer, "assets/wiggle-until-you-giggle.fda");
   music->startThread();
+}
+
+void Planets::simulate() {
+  Timestamp simStart;
+  if (!lost) next.step(sim);
+
+  int popCountBefore = sim.getPopCount();
+
+  if (!lost) sim.simulate(++seed, frameCounter);
+
+  if (popCountBefore != sim.getPopCount())
+    mixer.playSound(&pop);
+
+  next.setupPreview(sim);
+  if (!lost) {
+    uint32_t simMicros = simStart.elapsedMicros();
+    simTime += simMicros;
+    if (simMicros > maxSimTime) maxSimTime = simMicros;
+    simTimeHistogram.add(simMicros/100);
+  }
+}
+
+void Planets::renderGame() {
+  Timestamp renderStart;
+  SDL_BlitSurface(background, nullptr, screen, nullptr);
+
+  Fruit *fruits = sim.getFruits();
+  int count = sim.getNumFruits();
+  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, frameCounter);
+
+  uint32_t renderMicros = renderStart.elapsedMicros();
+  renderTime += renderMicros;
+  if (renderMicros > maxRenderTime) maxRenderTime = renderMicros;
+  renderTimeHistogram.add(renderMicros/100);
+}
+
+void Planets::start() {
+#ifdef BITTBOY
+#pragma message "BittBoy build"
+  screen = initSDL(0, 0);
+  SDL_ShowCursor(false);
+#else
+  screen = initSDL(640, 480);
+#endif
+  if (!screen) return;
+
+  initAudio();
 
   running = true;
 
@@ -353,9 +432,9 @@ void Planets::start() {
   timespec time;
   clock_gettime(CLOCK_MONOTONIC, &time);
 
-  uint32_t seed = time.tv_nsec;
+  seed = time.tv_nsec;
   sim.init(seed);
-  sim.setGravity(0.0078125f * 0.5f);
+  sim.setGravity(Scalar(0.0078125f * 0.5f));
 
   zoom = screen->h / (sim.getWorldHeight() + Scalar(2));
   rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
@@ -363,6 +442,8 @@ void Planets::start() {
   offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
 
   renderer->setLayout(zoom, offsetX, sim);
+  
+  snapshot = SDL_DisplayFormat(screen);
   background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
   SDL_Surface *backgroundScreen = SDL_DisplayFormat(screen);
   if (background->w < backgroundScreen->w || background->h < backgroundScreen->h)
@@ -380,17 +461,8 @@ void Planets::start() {
   next.zoom = zoom;
   next.reset(sim, seed);
 
-  uint32_t simTime = 0;
-  uint32_t renderTime = 0;
-  uint32_t frameCounter = 0;
-  uint32_t maxSimTime = 0;
-  uint32_t maxRenderTime = 0;
-  TimeHistogram renderTimeHistogram;
-  TimeHistogram simTimeHistogram;
-  TimeHistogram frameTimeHistogram;
   lost = false;
   Fruit *fruits;
-  int outlierIndex = -1;
 
   while (running) {
     if (!lost && frameCounter) {
@@ -400,36 +472,23 @@ void Planets::start() {
     if (!lost) ++frameCounter;
     Timestamp frame;
 
-    processInput(frame);
+    GameState nextState = processInput(frame);
 
-    Timestamp simStart;
-    if (!lost) next.step(sim);
+    if (state == GameState::game) {
+      simulate();
 
-    int popCountBefore = sim.getPopCount();
-
-    if (!lost) fruits = sim.simulate(++seed, frameCounter);
-    int count = sim.getNumFruits();
-
-    if (popCountBefore != sim.getPopCount())
-      mixer.playSound(&pop);
-
-    next.setupPreview(sim);
-    if (!lost) {
-      uint32_t simMicros = simStart.elapsedMicros();
-      simTime += simMicros;
-      if (simMicros > maxSimTime) maxSimTime = simMicros;
-      simTimeHistogram.add(simMicros/100);
+      renderGame();
+    } else {
+      SDL_BlitSurface(snapshot, nullptr, screen, nullptr);
     }
 
-    Timestamp renderStart;
-    SDL_BlitSurface(background, nullptr, screen, nullptr);
-
-    renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, frameCounter);
-
-    uint32_t renderMicros = renderStart.elapsedMicros();
-    renderTime += renderMicros;
-    if (renderMicros > maxRenderTime) maxRenderTime = renderMicros;
-    renderTimeHistogram.add(renderMicros/100);
+    if (state != nextState && nextState == GameState::menu) {
+      SDL_BlitSurface(screen, nullptr, snapshot, nullptr);
+      for (int i = 0; i < 16; ++i) {
+        blur(snapshot);
+      }
+    }
+    state = nextState;
 
     // Update the screen
     SDL_Flip(screen);
@@ -481,6 +540,7 @@ void Planets::start() {
   music->stopThread();
 
   SDL_FreeSurface(background);
+  SDL_FreeSurface(snapshot);
 
   SDL_Quit();
 }
