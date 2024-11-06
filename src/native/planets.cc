@@ -16,6 +16,7 @@
 #include "util.hh"
 #include "image.hh"
 #include "audio.hh"
+#include "menu.hh"
 
 struct TimeHistogram {
   uint32_t counts[256];
@@ -175,6 +176,7 @@ enum class GameState { game, lost, menu };
 
 class Planets {
   GameState state;
+  GameState returnState;
   FruitSim sim;
   SDL_Surface *screen;
   SDL_Surface *background;
@@ -187,6 +189,7 @@ class Planets {
   SDL_AudioSpec actualAudioSpec;
   AutoDelete<ThreadedFdaStreamer> music;
   AutoDelete<FruitRenderer> renderer;
+  AutoDelete<Menu> menu;
   NextPlacement next;
   ControlState controls;
   Scalar zoom;
@@ -221,6 +224,7 @@ public:
       next { .x = 0.0f, .xv = 0.0f, },
       controls { },
       state(GameState::game),
+      returnState(GameState::game),
       outlierIndex(-1),
       simTime(0),
       renderTime(0),
@@ -249,6 +253,12 @@ GameState Planets::processInput(const Timestamp &frame) {
     if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
       Control c = Control::UNMAPPED;
       switch (event.key.keysym.sym) {
+        case SDLK_UP:
+          c = Control::UP;
+          break;
+        case SDLK_DOWN:
+          c = Control::DOWN;
+          break;
         case SDLK_LEFT:
           c = Control::LEFT;
           break;
@@ -288,8 +298,26 @@ GameState Planets::processInput(const Timestamp &frame) {
     }
   }
 
-  if (controls.justPressed(Control::START)) {
-    sim.newGame();
+  if (state == GameState::menu) {
+    if (controls.justPressed(Control::UP)) menu->moveVertical(-1);
+    if (controls.justPressed(Control::DOWN)) menu->moveVertical(1);
+    if (controls.justPressed(Control::LEFT)) menu->moveHorizontal(-1);
+    if (controls.justPressed(Control::RIGHT)) menu->moveHorizontal(1);
+    if (controls.justPressed(Control::EAST) || controls.justPressed(Control::SOUTH)) {
+      Command cmd = menu->execute();
+      switch (cmd) {
+        case Command::quit:
+          running = false;
+          break;
+        case Command::resume:
+          nextState = returnState;
+          break;
+        case Command::reset:
+          sim.newGame();
+          nextState = returnState;
+          break;
+      }
+    }
   }
 
 #ifdef DESKTOP
@@ -299,11 +327,12 @@ GameState Planets::processInput(const Timestamp &frame) {
 #endif
     switch (state) {
       case GameState::game:
+      case GameState::lost:
+        returnState = state;
         nextState = GameState::menu;
         break;
       case GameState::menu:
-        nextState = GameState::game;
-        running = false;
+        nextState = returnState;
         break;
     }
   }
@@ -431,6 +460,7 @@ void Planets::start() {
   running = true;
 
   renderer = new FruitRenderer(screen);
+  menu = new Menu(*renderer);
 
   timespec time;
   clock_gettime(CLOCK_MONOTONIC, &time);
@@ -467,21 +497,26 @@ void Planets::start() {
   Fruit *fruits;
 
   while (running) {
+    bool justLost = false;
     if (state == GameState::game && simulationFrame) {
       outlierIndex = sim.findGroundedOutside(simulationFrame);
-      if (outlierIndex >= 0) state = GameState::lost;
+      if (outlierIndex >= 0) {
+        justLost = true;
+        state = GameState::lost;
+      }
     }
     if (state == GameState::game) ++simulationFrame;
     Timestamp frame;
 
     GameState nextState = processInput(frame);
 
-    if (state == GameState::game) {
+    if (state == GameState::game || state == GameState::lost) {
       simulate();
 
       renderGame();
     } else {
       SDL_BlitSurface(snapshot, nullptr, screen, nullptr);
+      menu->render(screen);
     }
 
     if (state != nextState && nextState == GameState::menu) {
@@ -490,7 +525,7 @@ void Planets::start() {
     }
     state = nextState;
 
-    if (state == GameState::menu && blurFrame > 0) {
+    if ((state == GameState::menu || state == GameState::lost) && blurFrame > 0) {
       blur(snapshot, --blurFrame);
     }
 

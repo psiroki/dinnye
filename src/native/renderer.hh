@@ -62,6 +62,41 @@ struct PixelBuffer {
   }
 };
 
+struct SurfaceLocker {
+  SDL_Surface *surface;
+  PixelBuffer pb;
+
+  inline SurfaceLocker(SDL_Surface *surface=nullptr): surface(surface), pb(nullptr) {
+    if (surface && SDL_MUSTLOCK(surface)) {
+      SDL_LockSurface(surface);
+    }
+    pb = surface;
+  }
+
+  inline void unlock() {
+    if (surface) {
+      if (SDL_MUSTLOCK(surface)) {
+        SDL_LockSurface(surface);
+      }
+      pb = surface = nullptr;
+    }
+  }
+
+  inline SDL_Surface* operator=(SDL_Surface *s) {
+    unlock();
+    surface = s;
+    if (surface && SDL_MUSTLOCK(surface)) {
+      SDL_LockSurface(surface);
+    }
+    pb = surface;
+    return surface;
+  }
+
+  inline ~SurfaceLocker() {
+    unlock();
+  }
+};
+
 struct ShadedSphere {
   PixelBuffer albedo;
   uint32_t *shading;
@@ -160,6 +195,8 @@ public:
     sizeX = sim.getWorldWidth();
     sizeY = sim.getWorldHeight();
   }
+  SDL_Surface* renderText(const char *str, uint32_t color);
   void renderBackground(SDL_Surface *background);
+  void renderSelection(PixelBuffer pb, int left, int top, int right, int bottom);
   void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex);
 };

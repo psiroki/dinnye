@@ -115,41 +115,6 @@ namespace {
 #ifdef FIXED
   Fixed sinLookup[65536];
 #endif
-
-  struct SurfaceLocker {
-    SDL_Surface *surface;
-    PixelBuffer pb;
-
-    inline SurfaceLocker(SDL_Surface *surface=nullptr): surface(surface), pb(nullptr) {
-      if (surface && SDL_MUSTLOCK(surface)) {
-        SDL_LockSurface(surface);
-      }
-      pb = surface;
-    }
-
-    inline void unlock() {
-      if (surface) {
-        if (SDL_MUSTLOCK(surface)) {
-          SDL_LockSurface(surface);
-        }
-        pb = surface = nullptr;
-      }
-    }
-
-    inline SDL_Surface* operator=(SDL_Surface *s) {
-      unlock();
-      surface = s;
-      if (surface && SDL_MUSTLOCK(surface)) {
-        SDL_LockSurface(surface);
-      }
-      pb = surface;
-      return surface;
-    }
-
-    inline ~SurfaceLocker() {
-      unlock();
-    }
-  };
 }
 
 void ShadedSphere::initTables() {
@@ -562,6 +527,14 @@ FruitRenderer::~FruitRenderer() {
   sphereDefs = nullptr;
 }
 
+SDL_Surface* FruitRenderer::renderText(const char *str, uint32_t color) {
+  SDL_Color col;
+  col.r = (color >> 16) & 0xFF;
+  col.g = (color >> 8) & 0xFF;
+  col.b = color & 0xFF;
+  return TTF_RenderText_Blended(font, str, col);
+}
+
 void FruitRenderer::renderBackground(SDL_Surface *background) {
   // Render gallery
   int radius = zoom * 7 / 12;
@@ -714,6 +687,22 @@ void quickBlit(PixelBuffer src, PixelBuffer dst, int x, int y) {
   }
 }
 
+void FruitRenderer::renderSelection(PixelBuffer pb, int left, int top, int right, int bottom) {
+  left = (left << 2) + 3;
+  right = (right << 2) + 3;
+  for (int y = top; y < bottom; ++y) {
+    uint32_t *line = pb.pixels + pb.pitch * y;
+    int r = right-- >> 2;
+    int l = left-- >> 2;
+    if (l < 0) l = 0;
+    for (int x = l; x < r; ++x) {
+      uint32_t col = line[x+2];
+      int red = (col >> 16) & 0xFF;
+      line[x] = 0xFFFFFFFF - ablend(col, red);
+    }
+  }
+}
+
 void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex) {
   Fruit *fruits = sim.getFruits();
   int score = sim.getScore();
@@ -734,19 +723,14 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       .w = 4,
       .h = static_cast<Uint16>(def.h * 6 / 8),
     };
+    int top = rect.y;
+    int bottom = rect.y + rect.h;
+    int left = 0;
+    int right = def.x;
+
     SurfaceLocker targetLock(target);
     PixelBuffer &pb(targetLock.pb);
-    int bottom = rect.y + rect.h;
-    int right = def.x << 2;
-    for (int y = rect.y; y < bottom; ++y) {
-      uint32_t *line = pb.pixels + pb.pitch * y;
-      int r = right-- >> 2;
-      for (int x = 0; x < r; ++x) {
-        uint32_t col = line[x+2];
-        int red = (col >> 16) & 0xFF;
-        line[x] = 0xFFFFFFFF - ablend(col, red);
-      }
-    }
+    renderSelection(pb, left, top, right, bottom);
     targetLock.unlock();
   }
 
