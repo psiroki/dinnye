@@ -2,7 +2,7 @@
 
 The reciprocal square root function returns $\frac{1}{\sqrt{x}} = x^{-0.5}$
 
-I want to calculate this F1C100s fast. For that I'll have to use fixed point math (16 integer and 16 fractional bits).
+I want to calculate this on the F1C100s SoC fast. For that I'll have to use fixed point math (16 integer and 16 fractional bits).
 It's best to start explaining it by understanding how floating point quick rsqrt works.
 
 ## IEEE float version
@@ -36,12 +36,12 @@ This can be done efficiently if we understand how floating-point numbers are rep
 
 The real value of a positive float $x$ is then represented as: $x = 2^{c-128}(1+m \times 2^{-23})$
 
-The logarithm of this is $\log_2 x = c + \log_2(1+m \times 2^{-23})$. The second logarithmic term will yield a value between 0 and 1,
-as its parameter is between 1 and 2. To approximate, we can simplify this as: $\log_2 x = c + m \times 2^{-23}$.
+The logarithm of this is $\log_2 x = c + \log_2(1 + m \times 2^{-23})$. The second logarithmic term will yield a value between 0 and 1,
+as its parameter is between 1 and 2. To approximate, we can simplify this as: $\log_2 x \approx c + m \times 2^{-23}$ (using the approximation $\log_2 y \approx y - 1$ for $1 \le y \le 2$).
 
 Mapping the float bits to a 32-bit integer gives this approximation, except it also scales it by $2^{23}$, However, this is acceptable, as mapping it back will also divide it by $2^{23}$.
 
-So we shift it right one bit (effectively dividing by two), negate it, and add a bias to minimize the average error.
+So we shift it right one bit (effectively dividing by two), negate it, and add a bias to adjust both for the IEEE exponent bias and to minimize the average error.
 
 ## Fixed point version
 
