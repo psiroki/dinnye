@@ -303,7 +303,9 @@ GameState Planets::processInput(const Timestamp &frame) {
     if (controls.justPressed(Control::DOWN)) menu->moveVertical(1);
     if (controls.justPressed(Control::LEFT)) menu->moveHorizontal(-1);
     if (controls.justPressed(Control::RIGHT)) menu->moveHorizontal(1);
-    if (controls.justPressed(Control::EAST) || controls.justPressed(Control::SOUTH)) {
+    if (controls.justPressed(Control::EAST) ||
+        controls.justPressed(Control::SOUTH) ||
+        controls.justPressed(Control::START)) {
       Command cmd = menu->execute();
       switch (cmd) {
         case Command::quit:

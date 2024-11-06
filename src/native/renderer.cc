@@ -337,19 +337,20 @@ namespace {
     if (yd > 0 ? y < pb.height - 1 : y > 0) {
       for (int x = xs; xd < 0 ? x >= xe : x < xe; x += xd) {
         uint64_t c = unpackColor(*line);
-        int xOffset = (xd < 0 ? x > 0 : x < xe-1) ? xd : 0;
-        c += unpackColor(line[xOffset]);
-        c += unpackColor(line[xOffset+yd]);
+        // abyss policy: black
+        if (xd < 0 ? x > 0 : x < xe-1) {
+          c += unpackColor(line[xd]);
+          c += unpackColor(line[xd+yd]);
+        }
         c += unpackColor(line[yd]);
         *line = packColor(c >> 2);
         line += xd;
       }
     } else {
       for (int x = xs; xd < 0 ? x >= xe : x < xe; x += xd) {
-        uint64_t c = unpackColor(*line) << 1;
+        uint64_t c = unpackColor(*line);
         uint64_t n = unpackColor((xd < 0 ? x > 0 : x < xe-1) ? line[xd] : *line);
-        // abyss policy: clamp
-        c += n << 1;
+        // abyss policy: black
         c += unpackColor(*line);
         *line = packColor(c >> 2);
         line += xd;
