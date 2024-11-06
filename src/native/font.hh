@@ -2,4 +2,4 @@
 
 #include <SDL/SDL.h>
 
-SDL_RWops* createRobotoOps();
+SDL_RWops* createFontOps();

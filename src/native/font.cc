@@ -1584,6 +1584,6 @@ static unsigned char Roboto_MediumItalic_subset_ttf[] = {
 };
 static const unsigned int Roboto_MediumItalic_subset_ttf_len = 18952;
 
-SDL_RWops* createRobotoOps() {
+SDL_RWops* createFontOps() {
   return SDL_RWFromMem(Roboto_MediumItalic_subset_ttf, Roboto_MediumItalic_subset_ttf_len);
 }

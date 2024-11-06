@@ -464,7 +464,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
   }
 
   fontSize = target->h / 25;
-  SDL_RWops *rwops = createRobotoOps();
+  SDL_RWops *rwops = createFontOps();
   font = TTF_OpenFontRW(rwops, 1, fontSize);
   scoreCache.setFont(font);
   if (font) {
