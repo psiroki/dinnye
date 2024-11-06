@@ -52,6 +52,14 @@ struct PixelBuffer {
       pixels = nullptr;
     }
   }
+
+  inline PixelBuffer cropped(int x1, int y1, int x2, int y2) {
+    PixelBuffer result(*this);
+    result.pixels += x1 + y1 * pitch;
+    result.width = x2 - x1;
+    result.height = y2 - y1;
+    return result;
+  }
 };
 
 struct ShadedSphere {
@@ -125,7 +133,7 @@ struct PlanetDefinition {
   int w, h;
 };
 
-void blur(SDL_Surface *s);
+void blur(SDL_Surface *s, int frame);
 
 class FruitRenderer {
   SDL_Surface **textures;

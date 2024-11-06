@@ -366,33 +366,55 @@ SDL_Surface* ScoreCache::render(int newScore) {
   return rendered;
 }
 
-void blur(SDL_Surface *s) {
-  SurfaceLocker lock(s);
-  PixelBuffer &pb(lock.pb);
-  for (int y = pb.height - 1; y >= 0; --y) {
-    uint32_t *line = pb.pixels + pb.pitch * y;
-    if (y) {
-      for (int x = pb.width - 1; x >= 0; --x) {
-        uint64_t c = unpackColor(line[x]);
-        c += unpackColor(line[x - pb.pitch]);
-        if (x > 0) {
-          c += unpackColor(line[x - 1]);
-          c += unpackColor(line[x - pb.pitch - 1]);
-          c >>= 2;
-        } else {
-          c >>= 1;
-        }
-        line[x] = packColor(c);
+namespace {
+  inline void blurLine(PixelBuffer &pb, int y, int xs, int xe, int xd, int yd) {
+    uint32_t *line = pb.pixels + pb.pitch * y + xs;
+    if (yd > 0 ? y < pb.height - 1 : y > 0) {
+      for (int x = xs; xd < 0 ? x >= xe : x < xe; x += xd) {
+        uint64_t c = unpackColor(*line);
+        int xOffset = (xd < 0 ? x > 0 : x < xe-1) ? xd : 0;
+        c += unpackColor(line[xOffset]);
+        c += unpackColor(line[xOffset+yd]);
+        c += unpackColor(line[yd]);
+        *line = packColor(c >> 2);
+        line += xd;
       }
     } else {
-      for (int x = 1; x < pb.width; ++x) {
-        uint64_t c = unpackColor(line[x]);
-        c += unpackColor(line[x - 1]);
-        c >>= 1;
-        line[x] = packColor(c);
+      for (int x = xs; xd < 0 ? x >= xe : x < xe; x += xd) {
+        uint64_t c = unpackColor(*line) << 1;
+        uint64_t n = unpackColor((xd < 0 ? x > 0 : x < xe-1) ? line[xd] : *line);
+        // abyss policy: clamp
+        c += n << 1;
+        c += unpackColor(*line);
+        *line = packColor(c >> 2);
+        line += xd;
       }
     }
   }
+
+  inline void blur(PixelBuffer pb, bool right, bool down) {
+    int xd = right ? 1 : -1;
+    int yd = down ? pb.pitch : -pb.pitch;
+    int xs = xd < 0 ? pb.width - 1 : 0;
+    int xe = xd < 0 ? 0 : pb.width;
+    if (yd < 0) {
+      for (int y = pb.height - 1; y >= 0; --y) {
+        blurLine(pb, y, xs, xe, xd, yd);
+      }
+    } else {
+      for (int y = 0; y < pb.height; ++y) {
+        blurLine(pb, y, xs, xe, xd, yd);
+      }
+    }
+  }
+}
+
+void blur(SDL_Surface *s, int frame) {
+  SurfaceLocker lock(s);
+  PixelBuffer &pb(lock.pb);
+  bool right = !!(frame & 1);
+  bool down = !!(frame & 2);
+  blur(pb, right, down);
 }
 
 FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0) {

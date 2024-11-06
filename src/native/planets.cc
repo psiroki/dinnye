@@ -171,7 +171,7 @@ struct NextPlacement {
   }
 };
 
-enum class GameState { game, menu };
+enum class GameState { game, lost, menu };
 
 class Planets {
   GameState state;
@@ -199,6 +199,8 @@ class Planets {
   uint32_t seed;
   uint32_t simTime;
   uint32_t renderTime;
+  uint32_t simulationFrame;
+  uint32_t blurFrame;
   uint32_t frameCounter;
   uint32_t maxSimTime;
   uint32_t maxRenderTime;
@@ -207,7 +209,6 @@ class Planets {
   TimeHistogram frameTimeHistogram;
 
   bool running;
-  bool lost;
 
   static void callAudioCallback(void *userData, uint8_t *stream, int len);
 
@@ -223,7 +224,9 @@ public:
       outlierIndex(-1),
       simTime(0),
       renderTime(0),
+      simulationFrame(0),
       frameCounter(0),
+      blurFrame(0),
       maxSimTime(0),
       maxRenderTime(0) { }
   void start();
@@ -276,7 +279,7 @@ GameState Planets::processInput(const Timestamp &frame) {
       }
       controls[c] = event.type == SDL_KEYDOWN;
     }
-    if (!lost && event.type == SDL_MOUSEMOTION) {
+    if (state == GameState::game && event.type == SDL_MOUSEMOTION) {
       next.x = (event.motion.x - offsetX) / zoom;
       next.constrainInside(sim);
     }
@@ -305,7 +308,7 @@ GameState Planets::processInput(const Timestamp &frame) {
     }
   }
 
-  if (!lost) {
+  if (state == GameState::game) {
     if (controls[Control::LEFT]) next.xv -= 0.01f;
     if (controls[Control::RIGHT]) next.xv += 0.01f;
     Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
@@ -381,17 +384,17 @@ void Planets::initAudio() {
 
 void Planets::simulate() {
   Timestamp simStart;
-  if (!lost) next.step(sim);
+  if (state == GameState::game) next.step(sim);
 
   int popCountBefore = sim.getPopCount();
 
-  if (!lost) sim.simulate(++seed, frameCounter);
+  if (state == GameState::game) sim.simulate(++seed, simulationFrame);
 
   if (popCountBefore != sim.getPopCount())
     mixer.playSound(&pop);
 
   next.setupPreview(sim);
-  if (!lost) {
+  if (state == GameState::game) {
     uint32_t simMicros = simStart.elapsedMicros();
     simTime += simMicros;
     if (simMicros > maxSimTime) maxSimTime = simMicros;
@@ -405,7 +408,7 @@ void Planets::renderGame() {
 
   Fruit *fruits = sim.getFruits();
   int count = sim.getNumFruits();
-  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, frameCounter);
+  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame);
 
   uint32_t renderMicros = renderStart.elapsedMicros();
   renderTime += renderMicros;
@@ -461,15 +464,14 @@ void Planets::start() {
   next.zoom = zoom;
   next.reset(sim, seed);
 
-  lost = false;
   Fruit *fruits;
 
   while (running) {
-    if (!lost && frameCounter) {
-      outlierIndex = sim.findGroundedOutside(frameCounter);
-      if (outlierIndex >= 0) lost = true;
+    if (state == GameState::game && simulationFrame) {
+      outlierIndex = sim.findGroundedOutside(simulationFrame);
+      if (outlierIndex >= 0) state = GameState::lost;
     }
-    if (!lost) ++frameCounter;
+    if (state == GameState::game) ++simulationFrame;
     Timestamp frame;
 
     GameState nextState = processInput(frame);
@@ -484,11 +486,13 @@ void Planets::start() {
 
     if (state != nextState && nextState == GameState::menu) {
       SDL_BlitSurface(screen, nullptr, snapshot, nullptr);
-      for (int i = 0; i < 16; ++i) {
-        blur(snapshot);
-      }
+      blurFrame = 32;
     }
     state = nextState;
+
+    if (state == GameState::menu && blurFrame > 0) {
+      blur(snapshot, --blurFrame);
+    }
 
     // Update the screen
     SDL_Flip(screen);
@@ -501,11 +505,12 @@ void Planets::start() {
     int millisToWait = 10 - frame.elapsedMicros()/1000;
     if (millisToWait > 0) SDL_Delay(millisToWait);
 #endif
+    ++frameCounter;
   }
   std::cout << "maxSimMicros: " << maxSimTime << std::endl;
   std::cout << "maxRenderMicros: " << maxRenderTime << std::endl;
-  std::cout << "simMicros avg: " << simTime/frameCounter << std::endl;
-  std::cout << "renderMicros avg: " << renderTime/frameCounter << std::endl;
+  std::cout << "simMicros avg: " << simTime/simulationFrame << std::endl;
+  std::cout << "renderMicros avg: " << renderTime/simulationFrame << std::endl;
   printPercentiles("sim", 167, simTimeHistogram.counts);
   printPercentiles("render", 167, renderTimeHistogram.counts);
   printPercentiles("frame", 167, frameTimeHistogram.counts);
