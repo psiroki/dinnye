@@ -43,6 +43,8 @@ Mapping the float bits to a 32-bit integer gives this approximation, except it a
 
 So we shift it right one bit (effectively dividing by two), negate it, and add a bias to adjust both for the IEEE exponent bias and to minimize the average error.
 
+Mapping the integer back to a float effectively performs an approximate inverse logarithmic operation. We then apply a Newton's method iteration to further refine the precision.
+
 ## Fixed point version
 
 ```C++
