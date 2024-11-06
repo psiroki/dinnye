@@ -448,10 +448,12 @@ void Planets::renderGame() {
 }
 
 void Planets::start() {
-#ifdef BITTBOY
+#if defined(BITTBOY)
 #pragma message "BittBoy build"
   screen = initSDL(0, 0);
   SDL_ShowCursor(false);
+#elif defined(LOREZ)
+  screen = initSDL(320, 240);
 #else
   screen = initSDL(640, 480);
 #endif
