@@ -10,19 +10,19 @@ It's best to start explaining it by understanding how floating point quick rsqrt
 ```C++
 float Q_rsqrt( float number )
 {
-	long i;
-	float x2, y;
-	const float threehalfs = 1.5F;
+  long i;
+  float x2, y;
+  const float threehalfs = 1.5F;
 
-	x2 = number * 0.5F;
-	y  = number;
-	i  = * ( long * ) &y;         // cool floating point bit level hacking to take the logarithm
-	i  = 0x5f3759df - ( i >> 1 ); // divide by two, negate it and add bias
-	y  = * ( float * ) &i;
-	y  = y * ( threehalfs - ( x2 * y * y ) );   // Newton's method 1st iteration
+  x2 = number * 0.5F;
+  y  = number;
+  i  = * ( long * ) &y;         // cool floating point bit level hacking to take the logarithm
+  i  = 0x5f3759df - ( i >> 1 ); // divide by two, negate it and add bias
+  y  = * ( float * ) &i;
+  y  = y * ( threehalfs - ( x2 * y * y ) );   // Newton's method 1st iteration
 //	y  = y * ( threehalfs - ( x2 * y * y ) );   // 2nd iteration, this can be removed
 
-	return y;
+  return y;
 }
 ```
 
@@ -34,10 +34,10 @@ This can be done efficiently if we understand how floating-point numbers are rep
 - This is followed by 8 exponent bits (we'll call this $c$ in formulas, since $e$ could be ambigious)
 - Finally, there are 23 mantissa bits (treated as a 23-bit integer, denoted as $m$)
 
-The real value of a positive float $x$ is then represented as: $x = 2^{c-128}(1+m \times 2^{-23})$
+The real value of a positive float $x$ is then represented as: $x = 2^{c-128}(1+m \cdot 2^{-23})$
 
-The logarithm of this is $\log_2 x = c + \log_2(1 + m \times 2^{-23})$. The second logarithmic term will yield a value between 0 and 1,
-as its parameter is between 1 and 2. To approximate, we can simplify this as: $\log_2 x \approx c + m \times 2^{-23}$ (using the approximation $\log_2 y \approx y - 1$ for $1 \le y \le 2$).
+The logarithm of this is $\log_2 x = c + \log_2(1 + m \cdot 2^{-23})$. The second logarithmic term will yield a value between 0 and 1,
+as its parameter is between 1 and 2. To approximate, we can simplify this as: $\log_2 x \approx c + m \cdot 2^{-23}$ (using the approximation $\log_2 y \approx y - 1$ for $1 \le y \le 2$).
 
 Mapping the float bits to a 32-bit integer gives this approximation, except it also scales it by $2^{23}$, However, this is acceptable, as mapping it back will also divide it by $2^{23}$.
 
