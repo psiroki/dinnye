@@ -346,7 +346,9 @@ GameState Planets::processInput(const Timestamp &frame) {
         case Command::reset:
           sim.newGame();
           next.reset(sim, frame.getTime().tv_nsec);
-          nextState = returnState;
+          // since we started a new game, we are returning to the game
+          // state explicitly (returnState may be the lost state)
+          returnState = nextState = GameState::game;
           break;
       }
     }
