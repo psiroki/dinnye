@@ -174,7 +174,7 @@ struct NextPlacement {
 
 enum class GameState { game, lost, menu };
 
-class Planets {
+class Planets: private GameSettings {
   GameState state;
   GameState returnState;
   FruitSim sim;
@@ -219,6 +219,11 @@ class Planets {
   void initAudio();
   void simulate();
   void renderGame();
+
+  bool isMusicEnabled() override;
+  void setMusicEnabled(bool val) override;
+  bool isSoundEnabled() override;
+  void setSoundEnabled(bool val) override;
 public:
   Planets():
       next { .x = 0.0f, .xv = 0.0f, },
@@ -238,6 +243,30 @@ public:
 
 void Planets::callAudioCallback(void *userData, uint8_t *stream, int len) {
   reinterpret_cast<Planets*>(userData)->mixer.audioCallback(stream, len);
+}
+
+bool Planets::isMusicEnabled() {
+  return !(mixer.getFlagsMuted() & SoundFlag::music);
+}
+
+void Planets::setMusicEnabled(bool val) {
+  if (val) {
+    mixer.setFlagsMuted(mixer.getFlagsMuted() & ~SoundFlag::music);
+  } else {
+    mixer.setFlagsMuted(mixer.getFlagsMuted() | SoundFlag::music);
+  }
+}
+
+bool Planets::isSoundEnabled() {
+  return !(mixer.getFlagsMuted() & SoundFlag::sound);
+}
+
+void Planets::setSoundEnabled(bool val) {
+  if (val) {
+    mixer.setFlagsMuted(mixer.getFlagsMuted() & ~SoundFlag::sound);
+  } else {
+    mixer.setFlagsMuted(mixer.getFlagsMuted() | SoundFlag::sound);
+  }
 }
 
 GameState Planets::processInput(const Timestamp &frame) {
@@ -316,6 +345,7 @@ GameState Planets::processInput(const Timestamp &frame) {
           break;
         case Command::reset:
           sim.newGame();
+          next.reset(sim, frame.getTime().tv_nsec);
           nextState = returnState;
           break;
       }
@@ -332,6 +362,7 @@ GameState Planets::processInput(const Timestamp &frame) {
       case GameState::lost:
         returnState = state;
         nextState = GameState::menu;
+        menu->reset();
         break;
       case GameState::menu:
         nextState = returnState;
@@ -376,6 +407,9 @@ void Planets::initAudio() {
 
   pop = SoundBufferView(allSounds, 0, dropOffset);
   drop = SoundBufferView(allSounds, dropOffset);
+
+  pop.flags = SoundFlag::sound;
+  drop.flags = SoundFlag::sound;
 
   for (int i = 0; i < drop.numSamples; ++i) {
     int32_t sample = bitExtend(drop.samples[i] & 0xFFFF) >> 2;
@@ -464,7 +498,7 @@ void Planets::start() {
   running = true;
 
   renderer = new FruitRenderer(screen);
-  menu = new Menu(*renderer);
+  menu = new Menu(*renderer, *this);
 
   timespec time;
   clock_gettime(CLOCK_MONOTONIC, &time);

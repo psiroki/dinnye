@@ -12,21 +12,25 @@ namespace {
       quit,
       mainMenu,
       newGame,
+      sound,
+      music,
     };
   }
 
   struct MenuItem {
     const char *caption;
-    uint32_t flags;
+    uint32_t meaning;
   };
 
-#define M(c, f) { .caption = c, .flags = f, }
+#define M(c, f) { .caption = c, .meaning = f, }
 #define P(c) M(c, Meaning::passive)
 #define EOM M(nullptr, 0)
 
   const MenuItem mainItems[] = {
     M("Resume", Meaning::resume),
     M("New Game", Meaning::newGame),
+    M("Music", Meaning::music),
+    M("Sound", Meaning::sound),
     M("Quit", Meaning::quit),
     EOM,
   };
@@ -51,7 +55,7 @@ public:
   inline const MenuItem* getSelection() {
     return items + selection;
   }
-  void render(SDL_Surface *target);
+  void render(SDL_Surface *target, GameSettings &settings);
 };
 
 Submenu::Submenu(const MenuItem *items, FruitRenderer &renderer):
@@ -79,7 +83,7 @@ Submenu::~Submenu() {
 
 
 void Submenu::adjustSelection() {
-  while (items[selection].flags == Meaning::passive) {
+  while (items[selection].meaning == Meaning::passive) {
     ++selection;
     if (selection >= numMenuItems) selection = 0;
   }
@@ -97,24 +101,72 @@ void Submenu::moveVertical(int delta) {
   adjustSelection();
 }
 
-void Submenu::render(SDL_Surface *target) {
+void Submenu::render(SDL_Surface *target, GameSettings &settings) {
   int x = (target->w - maxWidth) >> 1;
-  int y = (target->h - sumHeight - numMenuItems) >> 1;
+  int startY = (target->h - sumHeight - numMenuItems) >> 1;
+  int y = startY;
   int top = y;
   int bottom = y;
   for (int i = 0; i < numMenuItems; ++i) {
     SDL_Rect rect { .x = static_cast<Sint16>(x), .y = static_cast<Sint16>(y) };
     SDL_BlitSurface(captions[i], nullptr, target, &rect);
+    int height = captions[i]->h;
+    uint32_t meaning = items[i].meaning;
+    if (meaning == Meaning::music || meaning == Meaning::sound) {
+      bool enabled = meaning == Meaning::music ? settings.isMusicEnabled() : settings.isSoundEnabled();
+/*      SDL_Rect frame {
+        .x = static_cast<Sint16>(x - height),
+        .y = static_cast<Sint16>(y),
+        .w = static_cast<Uint16>(height * 2 / 3),
+        .h = static_cast<Uint16>(height)
+      };
+      uint32_t col = 0xFFFFFFFFu;
+      if (enabled) {
+        SDL_FillRect(target, &frame, col);
+      } else {
+        const uint32_t thickness = 1;
+        SDL_Rect r = frame;
+        r.h = thickness;
+        SDL_FillRect(target, &r, col);
+        frame.y += thickness;
+        frame.h -= thickness;
+        r = frame;
+        r.w = thickness;
+        SDL_FillRect(target, &r, col);
+        r = frame;
+        r.x += r.w - thickness;
+        r.w = thickness;
+        SDL_FillRect(target, &r, col);
+        frame.y += frame.h - thickness * 2;
+        frame.h = thickness;
+        frame.x += thickness;
+        frame.w -= thickness * 2;
+        SDL_FillRect(target, &frame, col);
+      }*/
+    }
     if (i == selection) top = y;
-    y += captions[i]->h + 1;
+    y += height + 1;
     if (i == selection) bottom = y;
   }
   SurfaceLocker locker(target);
-  int margin = (bottom - top) >> 1;
-  renderer.renderSelection(locker.pb, x - margin, top, x + maxWidth + margin * 2, bottom);
+  y = startY;
+  for (int i = 0; i < numMenuItems; ++i) {
+    int height = captions[i]->h;
+    uint32_t meaning = items[i].meaning;
+    if (meaning == Meaning::music || meaning == Meaning::sound) {
+      bool enabled = meaning == Meaning::music ? settings.isMusicEnabled() : settings.isSoundEnabled();
+      int left = x - height * 3 / 5;
+      int width = height * 2 / 5;
+      renderer.renderSelection(locker.pb, left, y + height / 8, left + width, y + height * 7 / 8 + 1, 0, !enabled);
+    }
+    y += height + 1;
+  }
+  int marginLeft = (bottom - top)*3 >> 2;
+  int marginRight = (bottom - top) >> 1;
+  renderer.renderSelection(locker.pb, x - marginLeft, top, x + maxWidth + marginRight * 2, bottom, 0);
 }
 
-Menu::Menu(FruitRenderer &renderer): renderer(renderer) {
+Menu::Menu(FruitRenderer &renderer, GameSettings &settings): renderer(renderer), settings(settings) {
   main = new Submenu(mainItems, renderer);
   current = main;
 }
@@ -138,7 +190,7 @@ void Menu::moveHorizontal(int delta) {
 
 Command Menu::execute() {
   const MenuItem *sel = current->getSelection();
-  switch (sel->flags) {
+  switch (sel->meaning) {
     case Meaning::mainMenu:
       current = main;
       break;
@@ -146,6 +198,12 @@ Command Menu::execute() {
       return Command::reset;
     case Meaning::resume:
       return Command::resume;
+    case Meaning::music:
+      settings.setMusicEnabled(!settings.isMusicEnabled());
+      return Command::nop;
+    case Meaning::sound:
+      settings.setSoundEnabled(!settings.isSoundEnabled());
+      return Command::nop;
     case Meaning::quit:
       return Command::quit;
   }
@@ -153,5 +211,5 @@ Command Menu::execute() {
 }
 
 void Menu::render(SDL_Surface *target) {
-  current->render(target);
+  current->render(target, settings);
 }

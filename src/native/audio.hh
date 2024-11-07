@@ -27,9 +27,17 @@ public:
   const uint8_t* makeAvailable(int32_t start, int32_t numBytes);
 };
 
+namespace SoundFlag {
+  enum {
+    music = 1,
+    sound = 2,
+  };
+}
+
 struct SoundBufferView {
   uint32_t *samples;
   uint32_t numSamples;
+  uint32_t flags;
   Condition *condition;
 
   inline SoundBufferView(): samples(0), numSamples(0), condition(0) { }
@@ -52,8 +60,16 @@ struct MixChannel {
   uint32_t playId;
   uint64_t timeStart;
 
-  bool isOver(uint64_t audioTime) {
+  inline bool isOver(uint64_t audioTime) {
     return !buffer || timeStart < audioTime && (timeStart + buffer->numSamples) <= audioTime;
+  }
+
+  inline bool isMutedSound(uint32_t mask) {
+    return (buffer->flags & SoundFlag::sound) && (buffer->flags & mask);
+  }
+
+  inline bool isMutedMusic(uint32_t mask) {
+    return (buffer->flags & SoundFlag::music) && (buffer->flags & mask);
   }
 };
 
@@ -75,11 +91,26 @@ class Mixer {
   int donePlayingRead;
   int donePlayingWrite;
   Mutex playLock;
+  uint32_t flagsMuted;
+  uint64_t musicPauseTime;
 public:
-  inline Mixer(): audioTime { 0, 0, 0, 0 }, currentTimes(0), soundRead(0), soundWrite(0), donePlayingRead(0), donePlayingWrite(0), numChannelsUsed(0), playIdCounter(0) { }
+  inline Mixer():
+      audioTime { 0, 0, 0, 0 },
+      currentTimes(0),
+      soundRead(0),
+      soundWrite(0),
+      donePlayingRead(0),
+      donePlayingWrite(0),
+      numChannelsUsed(0),
+      playIdCounter(0),
+      flagsMuted(0),
+      musicPauseTime(0) { }
   void audioCallback(uint8_t *stream, int len);
   uint32_t playSound(const SoundBufferView *buffer);
-  uint32_t playSoundAt(const SoundBufferView *buffer, uint32_t at);
+  uint32_t playSoundAt(const SoundBufferView *buffer, uint64_t at);
+  inline uint64_t getMusicPauseTime() {
+    return musicPauseTime;
+  }
   inline uint64_t getAudioTime() {
     return audioTime[currentTimes];
   }
@@ -89,6 +120,12 @@ public:
   }
   inline uint32_t getNumChannelsUsed() const {
     return numChannelsUsed;
+  }
+  inline void setFlagsMuted(uint32_t newValue) {
+    flagsMuted = newValue;
+  }
+  inline uint32_t getFlagsMuted() {
+    return flagsMuted;
   }
   /// Returns the next playId that has just finished, or 0
   /// if no more are available (0 will never be used as an id)
@@ -106,6 +143,7 @@ class FdaStreamer {
   uint32_t samplesPerFrame;
   fda_desc fda;
   Condition *condition;
+  uint64_t lastMusicPauseTime;
 
   void fillBuffer(int index);
 public:
@@ -114,7 +152,8 @@ public:
       compressed(filename),
       condition(condition),
       timeNext(0),
-      samplesPerFrame(0) {
+      samplesPerFrame(0),
+      lastMusicPauseTime(0) {
     buffers[0].resize(5120*4);
     buffers[1].resize(5120*4);
     views[0].condition = condition;

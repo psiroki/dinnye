@@ -76,6 +76,7 @@ void SoundBuffer::generateMono(uint32_t newNumSamples, MonoSampleGenerator gen) 
 void Mixer::audioCallback(uint8_t *stream, int len) {
   uint64_t time = audioTime[currentTimes];
   int numSamples = len / 4;
+  uint32_t paused = flagsMuted;
 
   int nextWatch = (currentTimes + 1) & 3;
   times[nextWatch].reset();
@@ -85,7 +86,7 @@ void Mixer::audioCallback(uint8_t *stream, int len) {
   // remove finished channels
   Condition *cond = nullptr;
   for (int i = numChannelsUsed - 1; i >= 0; --i) {
-    if (channels[i].isOver(time)) {
+    if (channels[i].isOver(time) || channels[i].isMutedSound(flagsMuted)) {
       donePlaying[donePlayingWrite] = channels[i].playId;
       Condition *c = channels[i].buffer->condition;
       if (c) cond = c;
@@ -104,13 +105,20 @@ void Mixer::audioCallback(uint8_t *stream, int len) {
     soundRead = (soundRead + 1) & (soundQueueSize - 1);
   }
 
+  if (flagsMuted & SoundFlag::music) musicPauseTime += numSamples;
+  for (int i = 0; i < numChannelsUsed; ++i) {
+    if (channels[i].isMutedMusic(flagsMuted)) {
+      channels[i].timeStart += numSamples;
+    }
+  }
+
   uint32_t *s = reinterpret_cast<uint32_t*>(stream);
   for (int i = 0; i < numSamples; ++i) {
     int mix[2] { 0, 0 };
     for (int j = 0; j < numChannelsUsed; ++j) {
       MixChannel &ch(channels[j]);
       uint64_t start = ch.timeStart;
-      if (start <= time && !ch.isOver(time)) {
+      if (start <= time && !ch.isOver(time) && !(ch.buffer->flags & flagsMuted)) {
         uint32_t sampleIndex = time - start;
         uint32_t sample = ch.buffer->samples[sampleIndex];
         for (int k = 0; k < 2; ++k) {
@@ -131,7 +139,7 @@ uint32_t Mixer::playSound(const SoundBufferView *buffer) {
   return playSoundAt(buffer, getAudioTimeNow());
 }
 
-uint32_t Mixer::playSoundAt(const SoundBufferView *buffer, uint32_t at) {
+uint32_t Mixer::playSoundAt(const SoundBufferView *buffer, uint64_t at) {
   playLock.lock();
   MixChannel &ch(soundsToAdd[soundWrite]);
   ch.buffer = buffer;
@@ -154,6 +162,7 @@ void FdaStreamer::fillBuffer(int index) {
   SoundBuffer &buf(buffers[index]);
   views[index] = buf;
   views[index].condition = condition;
+  views[index].flags = SoundFlag::music;
   int16_t *start = reinterpret_cast<int16_t*>(buf.samples);
   int16_t *end = reinterpret_cast<int16_t*>(buf.samples + buf.numSamples);
   int samplesLeft = buf.numSamples;
@@ -201,7 +210,7 @@ void FdaStreamer::handleDone(uint32_t playId) {
   for (int i = 0; i < 2; ++i) {
     if (playId == pendingPlayIds[i]) {
       fillBuffer(i);
-      pendingPlayIds[i] = mixer.playSoundAt(views + i, timeNext);
+      pendingPlayIds[i] = mixer.playSoundAt(views + i, timeNext + mixer.getMusicPauseTime());
       timeNext += views[i].numSamples;
     }
   }

@@ -197,6 +197,6 @@ public:
   }
   SDL_Surface* renderText(const char *str, uint32_t color);
   void renderBackground(SDL_Surface *background);
-  void renderSelection(PixelBuffer pb, int left, int top, int right, int bottom);
+  void renderSelection(PixelBuffer pb, int left, int top, int right, int bottom, int shift, bool hollow = false);
   void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex);
 };

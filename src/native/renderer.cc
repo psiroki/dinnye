@@ -589,7 +589,7 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
 
     SDL_Surface *text = def.nameText;
     if (text) {
-      dst.x = static_cast<Sint16>(planetLeft - text->w - 8);
+      dst.x = static_cast<Sint16>(planetLeft - text->w - (radius + 1) / 2);
       dst.y = static_cast<Sint16>(y + radius - text->h * 9 / 16 + fontSize / 8);
       SDL_BlitSurface(text, nullptr, background, &dst);
     }
@@ -688,7 +688,7 @@ void quickBlit(PixelBuffer src, PixelBuffer dst, int x, int y) {
   }
 }
 
-void FruitRenderer::renderSelection(PixelBuffer pb, int left, int top, int right, int bottom) {
+void FruitRenderer::renderSelection(PixelBuffer pb, int left, int top, int right, int bottom, int shift, bool hollow) {
   left = (left << 2) + 3;
   right = (right << 2) + 3;
   for (int y = top; y < bottom; ++y) {
@@ -696,8 +696,9 @@ void FruitRenderer::renderSelection(PixelBuffer pb, int left, int top, int right
     int r = right-- >> 2;
     int l = left-- >> 2;
     if (l < 0) l = 0;
-    for (int x = l; x < r; ++x) {
-      uint32_t col = line[x+2];
+    int xi = hollow && y > top && y < bottom - 1 ? r - l - 1 : 1;
+    for (int x = l; x < r; x += xi) {
+      uint32_t col = line[x+shift];
       int red = (col >> 16) & 0xFF;
       line[x] = 0xFFFFFFFF - ablend(col, red);
     }
@@ -731,7 +732,7 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
 
     SurfaceLocker targetLock(target);
     PixelBuffer &pb(targetLock.pb);
-    renderSelection(pb, left, top, right, bottom);
+    renderSelection(pb, left, top, right, bottom, 2);
     targetLock.unlock();
   }
 
