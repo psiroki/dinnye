@@ -122,3 +122,5 @@ public:
   void wait();
   void notify();
 };
+
+int createDirectoryForFile(const char *path);

@@ -1,6 +1,16 @@
 #include "util.hh"
 
-#include <stdint.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <string.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#define mkdir(path, mode) _mkdir(path) // Windows does not support `mode`, so we ignore it
+#else
+#include <errno.h>
+#endif
 
 namespace {
   const float nanoToSecond = 1.0e-9f;
@@ -94,3 +104,41 @@ void Condition::notify() {
   pthread_cond_signal(&condition);
   pthread_mutex_unlock(&mutex);
 }
+
+int createDirectoryForFile(const char *path) {
+  size_t len = strnlen(path, 65536);
+  char temp[len + 1];
+  char *p = nullptr;
+
+  // Copy path to a temporary buffer
+  strncpy(temp, path, len + 1);
+  len = strlen(temp);
+
+  // Remove trailing slash, if there is one
+  if (temp[len - 1] == '/') {
+    temp[len - 1] = '\0';
+  }
+
+  // Iterate through the path, creating directories as needed
+  for (p = temp + 1; *p; p++) {
+    if (*p == '/') {
+      *p = '\0'; // Temporarily end the string to create intermediate directories
+
+      // Attempt to create the directory
+      #ifdef _WIN32
+      if (mkdir(temp) != 0 && errno != EEXIST) {
+      #else
+      if (mkdir(temp, 0755) != 0 && errno != EEXIST) {
+      #endif
+        return -1; // Failed to create directory
+      }
+
+      *p = '/'; // Restore slash
+    }
+  }
+
+  // The last section is intentionally ignored, it's supposed to be a file
+
+  return 0;
+}
+

@@ -210,6 +210,7 @@ class Planets: private GameSettings {
   TimeHistogram renderTimeHistogram;
   TimeHistogram simTimeHistogram;
   TimeHistogram frameTimeHistogram;
+  const char * const configFilePath;
 
   bool running;
 
@@ -225,7 +226,7 @@ class Planets: private GameSettings {
   bool isSoundEnabled() override;
   void setSoundEnabled(bool val) override;
 public:
-  Planets():
+  Planets(const char *configFilePath):
       next { .x = 0.0f, .xv = 0.0f, },
       controls { },
       state(GameState::game),
@@ -237,7 +238,10 @@ public:
       frameCounter(0),
       blurFrame(0),
       maxSimTime(0),
-      maxRenderTime(0) { }
+      maxRenderTime(0),
+      configFilePath(configFilePath) {
+    std::cout << "Config file: " << configFilePath << std::endl;
+  }
   void start();
 };
 
@@ -625,8 +629,44 @@ void Planets::start() {
   SDL_Quit();
 }
 
-int main() {
-  Planets planets;
+int main(int argc, char **argv) {
+  const char *configHome = SDL_getenv("XDG_CONFIG_HOME");
+  const char *appData = SDL_getenv("APPDATA");
+  const char *home = SDL_getenv("HOME");
+  const char *relFile = "/planetmerge/config.bin";
+  AutoDeleteArray<char> configFilePath = nullptr;
+  AutoDeleteArray<char> customHome = nullptr;
+  if (!configHome && appData) {
+    configHome = appData;
+  } else if (!configHome && !appData && home) {
+    relFile = "/.config/planetmerge/config.bin";
+    configHome = home;
+  } else if (!configHome && !appData && !home) {
+    relFile = "/.config/planetmerge/config.bin";
+    const char *end = SDL_strrchr(argv[0], '/');
+    if (!end) end = argv[0];
+    customHome = new char[end - argv[0] + 1];
+    strncpy(customHome, argv[0], end - argv[0] + 1);
+    customHome[end - argv[0]] = 0;
+    configHome = customHome;
+  }
+  const size_t subdirLen = strnlen(relFile, 256);
+  if (configHome) {
+    size_t len = strnlen(configHome, 65536);
+    size_t cfpLen = len + subdirLen + 1;
+    configFilePath = new char[cfpLen];
+    snprintf(configFilePath, cfpLen, "%s%s", configHome, relFile);
+#ifdef _WIN32
+    // In case I'm going to support Windows
+    for (int i = 0; i < cfpLen; ++i) {
+      if (configFilePath[i] == '\\') configFilePath[i] = '/';
+    }
+#endif
+    createDirectoryForFile(configFilePath);
+  } else {
+    configFilePath = nullptr;
+  }
+  Planets planets(configFilePath);
   planets.start();
   return 0;
 }
