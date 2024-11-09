@@ -4,7 +4,12 @@ PLATFORMS_DIR ?= $(shell realpath "`dirname "$(BUILD_DIR)"`")
 ASSETS_DIR := $(PROJECT_ROOT)/assets
 PACKER_DIR := $(shell pwd)
 
-ASSETS := $(wildcard $(ASSETS_DIR)/*)
+ASSETS_LO_RES := $(wildcard $(ASSETS_DIR)/lores/*)
+ASSETS_HI_RES := $(wildcard $(ASSETS_DIR)/*)
+LO_RES_NAMES := $(patsubst $(ASSETS_DIR)/lores/%, $(ASSETS_DIR)/%, $(ASSETS_LO_RES))
+
+ASSETS := $(filter-out $(LO_RES_NAMES) $(ASSETS_DIR)/hi_background.jpg $(ASSETS_DIR)/lores, $(ASSETS_HI_RES))
+LORES_ASSETS := $(wildcard $(ASSETS_DIR)/lores/*)
 
 SD_ROOT := $(BUILD_DIR)/SD
 BINARY_DIR_SD := $(SD_ROOT)/games/planetmerge
@@ -20,14 +25,23 @@ package: $(ZIP_PACKAGE)
 	@echo Target path: $(BUILD_DIR)
 	@echo ZIP package: $(ZIP_PACKAGE)
 
-$(ZIP_PACKAGE): $(ASSETS) $(BUILD_DIR)/planets $(PACKER_DIR)/planetmerge $(PACKER_DIR)/planetmerge.png
+$(ZIP_PACKAGE): $(ASSETS) $(LORES_ASSETS) $(BUILD_DIR)/planets $(PACKER_DIR)/planetmerge $(PACKER_DIR)/planetmerge.png
 	mkdir -p "$(BINARY_DIR_SD)"
 	mkdir -p "$(ASSET_DIR_SD)"
 	mkdir -p "$(SHORTCUT_DIR_SD)"
 	mkdir -p "$(ICONS_DIR_SD)"
 	@echo Assets: $(ASSETS)
 	cp $(ASSETS) "$(ASSET_DIR_SD)/"
+	cp $(LORES_ASSETS) "$(ASSET_DIR_SD)/"
 	cp "$(BUILD_DIR)/planets" "$(BINARY_DIR_SD)/"
 	cp "$(PACKER_DIR)/planetmerge" "$(SHORTCUT_DIR_SD)/"
 	cp "$(PACKER_DIR)/planetmerge.png" "$(ICONS_DIR_SD)/"
 	(cd "$(SD_ROOT)"; zip -r $(ZIP_PACKAGE) *)
+
+dumpNames:
+	@for file in $(ASSETS); do \
+	    echo $$file; \
+	done
+	@for file in $(LORES_ASSETS); do \
+	    echo $$file; \
+	done
