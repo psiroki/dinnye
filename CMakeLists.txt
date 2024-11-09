@@ -12,7 +12,7 @@ find_package(SDL REQUIRED)
 find_package(SDL_ttf REQUIRED)
 
 option(LOREZ "Low resolution test" OFF)
-option(SPEEDTESTING "Start with a fair amount of fruits to test the speed reliably" ON)
+option(SPEEDTESTING "Start with a fair amount of fruits to test the speed reliably" OFF)
 option(BITTBOY "Target Bittboy" OFF)
 option(FIXED "Use fixed point math" ${BITTBOY})
 option(DEBUG_VISUALIZATION "Visualize internal workings of the renderer" OFF)

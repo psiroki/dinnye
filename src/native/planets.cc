@@ -12,6 +12,7 @@
 #endif
 
 #include "../common/sim.hh"
+#include "serialization.hh"
 #include "renderer.hh"
 #include "util.hh"
 #include "image.hh"
@@ -132,6 +133,20 @@ struct NextPlacement {
   int seed;
   bool valid;
 
+  inline void copy(NextDrop &n) {
+    n.x = x;
+    n.xv = xv;
+    n.radIndex = radIndex;
+    n.seed = seed;
+  }
+
+  inline void ingest(NextDrop &n) {
+    x = n.x;
+    xv = n.xv;
+    radIndex = n.radIndex;
+    seed = n.seed;
+  }
+
   inline void constrainInside(FruitSim &sim) {
     Scalar r = sim.getRadius(radIndex);
     if (x < r) {
@@ -220,6 +235,8 @@ class Planets: private GameSettings {
   void initAudio();
   void simulate();
   void renderGame();
+  void saveState();
+  void loadState();
 
   bool isMusicEnabled() override;
   void setMusicEnabled(bool val) override;
@@ -393,6 +410,92 @@ GameState Planets::processInput(const Timestamp &frame) {
   return nextState;
 }
 
+void Planets::saveState() {
+  std::ofstream file(configFilePath, std::ios::binary);
+
+  if (file.is_open()) {
+    SaveState state;
+    uint32_t t = time(nullptr);
+    uint32_t nsec = Timestamp().getTime().tv_nsec;
+    file.write(reinterpret_cast<const char*>(&t), sizeof(t));
+    file.write(reinterpret_cast<const char*>(&nsec), sizeof(nsec));
+    next.copy(state.next);
+    state.audioFlagsMuted = mixer.getFlagsMuted();
+    state.outlierIndex = outlierIndex;
+    state.simulationFrame = simulationFrame;
+    state.score = sim.getScore();
+    state.numFruits = sim.getNumFruits();
+    struct FileWriter: public Writer {
+      std::ofstream &file;
+      uint64_t seed;
+
+      FileWriter(std::ofstream &file, uint64_t seed): file(file), seed(seed) { }
+
+      void write(const uint32_t *buf, uint32_t numWords) override {
+        const uint32_t numScrambled = 1024;
+        uint32_t scrambled[numScrambled];
+        while (numWords > 0) {
+          uint32_t len = numWords > numScrambled ? numScrambled : numWords;
+          for (int i = 0; i < len; ++i) {
+            uint32_t w = buf[i];
+            seed ^= seed * 3779 + (seed >> 32) * 149 + 7639;
+            scrambled[i] = w ^ seed;
+            seed ^= w;
+          }
+          file.write(reinterpret_cast<const char*>(scrambled), len * sizeof(uint32_t));
+          numWords -= len;
+        }
+      }
+    } w(file, static_cast<uint64_t>(t)*1000000000ll + nsec);
+    state.write(sim.getFruits(), w);
+    file.close();
+  }
+}
+
+void Planets::loadState() {
+  std::ifstream file(configFilePath, std::ios::binary);
+
+  if (file.is_open()) {
+    SaveState state;
+    uint32_t t;
+    uint32_t nsec;
+    file.read(reinterpret_cast<char*>(&t), sizeof(t));
+    file.read(reinterpret_cast<char*>(&nsec), sizeof(nsec));
+    struct FileReader: public Reader {
+      std::ifstream &file;
+      uint64_t seed;
+
+      FileReader(std::ifstream &file, uint64_t seed): file(file), seed(seed) { }
+
+      void read(uint32_t *buf, uint32_t numWords) override {
+        const uint32_t numScrambled = 1024;
+        uint32_t scrambled[numScrambled];
+        while (numWords > 0) {
+          uint32_t len = numWords > numScrambled ? numScrambled : numWords;
+          file.read(reinterpret_cast<char*>(scrambled), len * sizeof(uint32_t));
+          for (int i = 0; i < len; ++i) {
+            uint32_t w = scrambled[i];
+            seed ^= seed * 3779 + (seed >> 32) * 149 + 7639;
+            w ^= seed;
+            buf[i] = w;
+            seed ^= w;
+          }
+          numWords -= len;
+        }
+      }
+    } r(file, static_cast<uint64_t>(t)*1000000000ll + nsec);
+    state.read(sim.getFruits(), r);
+    file.close();
+
+    next.ingest(state.next);
+    mixer.setFlagsMuted(state.audioFlagsMuted);
+    outlierIndex = state.outlierIndex;
+    simulationFrame = state.simulationFrame;
+    sim.setNumFruits(state.numFruits);
+    sim.setScore(state.score);
+  }
+}
+
 void Planets::initAudio() {
   allSounds.resize(10886);
   std::ifstream file("assets/sounds.dat", std::ios::binary);
@@ -503,9 +606,6 @@ void Planets::start() {
 
   running = true;
 
-  renderer = new FruitRenderer(screen);
-  menu = new Menu(*renderer, *this);
-
   timespec time;
   clock_gettime(CLOCK_MONOTONIC, &time);
 
@@ -518,7 +618,10 @@ void Planets::start() {
   centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
   offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
 
-  renderer->setLayout(zoom, offsetX, sim);
+  next.zoom = zoom;
+  next.reset(sim, seed);
+
+  loadState();
   
   snapshot = SDL_DisplayFormat(screen);
   background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
@@ -533,10 +636,11 @@ void Planets::start() {
   SDL_FreeSurface(background);
   background = backgroundScreen;
   SDL_SetAlpha(background, 0, 255);
-  renderer->renderBackground(background);
 
-  next.zoom = zoom;
-  next.reset(sim, seed);
+  renderer = new FruitRenderer(screen);
+  menu = new Menu(*renderer, *this);
+  renderer->setLayout(zoom, offsetX, sim);
+  renderer->renderBackground(background);
 
   Fruit *fruits;
 
@@ -626,6 +730,7 @@ void Planets::start() {
   SDL_FreeSurface(background);
   SDL_FreeSurface(snapshot);
 
+  saveState();
   SDL_Quit();
 }
 
@@ -633,16 +738,16 @@ int main(int argc, char **argv) {
   const char *configHome = SDL_getenv("XDG_CONFIG_HOME");
   const char *appData = SDL_getenv("APPDATA");
   const char *home = SDL_getenv("HOME");
-  const char *relFile = "/planetmerge/config.bin";
+  const char *relFile = "/planetmerge/state.bin";
   AutoDeleteArray<char> configFilePath = nullptr;
   AutoDeleteArray<char> customHome = nullptr;
   if (!configHome && appData) {
     configHome = appData;
   } else if (!configHome && !appData && home) {
-    relFile = "/.config/planetmerge/config.bin";
+    relFile = "/.config/planetmerge/state.bin";
     configHome = home;
   } else if (!configHome && !appData && !home) {
-    relFile = "/.config/planetmerge/config.bin";
+    relFile = "/.config/planetmerge/state.bin";
     const char *end = SDL_strrchr(argv[0], '/');
     if (!end) end = argv[0];
     customHome = new char[end - argv[0] + 1];

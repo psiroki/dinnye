@@ -302,8 +302,16 @@ public:
     return numFruits;
   }
 
+  inline void setNumFruits(int newVal) {
+    numFruits = newVal;
+  }
+
   inline int getScore() const {
     return score;
+  }
+
+  inline void setScore(int newVal) {
+    score = newVal;
   }
 
   inline Fruit* getFruits() {
