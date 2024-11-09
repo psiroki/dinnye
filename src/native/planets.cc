@@ -256,6 +256,7 @@ class Planets: private GameSettings {
   Scalar offsetX;
 
   int outlierIndex;
+  uint32_t loseAnimationFrame;
 
   uint32_t seed;
   uint32_t simulationFrame;
@@ -630,7 +631,7 @@ void Planets::renderGame() {
 
   Fruit *fruits = sim.getFruits();
   int count = sim.getNumFruits();
-  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame);
+  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame, state == GameState::lost);
 
   renderTime.end();
 }
@@ -696,8 +697,8 @@ void Planets::start() {
       outlierIndex = sim.findGroundedOutside(simulationFrame);
       if (outlierIndex >= 0) {
         justLost = true;
-        if (!savedLostState) insertHighscore(sim.getScore());
         state = GameState::lost;
+        if (!savedLostState) insertHighscore(sim.getScore());
       }
     }
     if (state == GameState::game) {
@@ -710,20 +711,29 @@ void Planets::start() {
 
     GameState nextState = processInput(frame);
 
-    if (state == GameState::game || state == GameState::lost) {
+    if (state == GameState::game || justLost) {
       simulate();
 
       renderGame();
     } else {
       SDL_BlitSurface(snapshot, nullptr, screen, nullptr);
-      menu->render(screen);
+      if (state == GameState::menu) {
+        menu->render(screen);
+      } else {
+        renderer->renderLostScreen(sim.getScore(), highscores[0].score, snapshot, loseAnimationFrame++);
+      }
     }
 
-    if (state != nextState && nextState == GameState::menu) {
-      SDL_BlitSurface(screen, nullptr, snapshot, nullptr);
-      blurFrame = 32;
+    if (state != nextState && nextState == GameState::menu || justLost) {
+      if (state != GameState::lost || justLost) {
+        SDL_BlitSurface(screen, nullptr, snapshot, nullptr);
+        blurFrame = 32;
+      }
       timespec t = frame.getTime();
       menu->setAppearanceSeed(t.tv_nsec + t.tv_sec);
+    }
+    if (justLost) {
+      renderer->renderLostScreen(sim.getScore(), highscores[0].score, nullptr, 0);
     }
     state = nextState;
 

@@ -182,6 +182,6 @@ Command Menu::execute() {
 }
 
 void Menu::render(SDL_Surface *target) {
-  renderer.renderTitle(appearanceSeed);
+  renderer.renderTitle(appearanceSeed, appearanceFrame++);
   current->render(target, settings);
 }

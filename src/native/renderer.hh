@@ -142,6 +142,7 @@ public:
 };
 
 class ScoreCache {
+  const char *title;
   SDL_Surface *rendered;
   int score;
   TTF_Font *font;
@@ -149,7 +150,13 @@ class ScoreCache {
 
   void freeSurface();
 public:
-  inline ScoreCache(): rendered(0), score(-1), font(0), dirty(false) { }
+  inline ScoreCache(const char *title = "Score"):
+      title(title),
+      rendered(0),
+      score(-1),
+      font(0),
+      dirty(false) {
+    }
   ~ScoreCache();
 
   inline void setFont(TTF_Font *newFont) {
@@ -185,6 +192,7 @@ class FruitRenderer {
   int fontSize;
   TTF_Font *font;
   ScoreCache scoreCache;
+  ScoreCache highscoreCache;
   SDL_Surface *title;
 public:
   FruitRenderer(SDL_Surface *target);
@@ -197,8 +205,9 @@ public:
     sizeY = sim.getWorldHeight();
   }
   SDL_Surface* renderText(const char *str, uint32_t color);
-  void renderTitle(int taglineSelection);
+  void renderTitle(int taglineSelection, int fade);
+  void renderLostScreen(int score, int highscore, SDL_Surface *background, uint32_t animationFrame);
   void renderBackground(SDL_Surface *background);
   void renderSelection(PixelBuffer pb, int left, int top, int right, int bottom, int shift, bool hollow = false);
-  void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex);
+  void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex, bool skipScore = false);
 };

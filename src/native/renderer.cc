@@ -140,6 +140,14 @@ namespace {
     { .x = 54, .y = 175, .w = 214, .h = 11, },
   };
   const int numTitleSprites = sizeof(titleSprites) / sizeof(*titleSprites);
+
+  inline int smoothstep(int x, int bits) {
+    int y = x * x * ((3 << bits) - 2*x);  // 4096 * 64
+    int yb = bits * 3;
+    if (yb > 16) y >>= yb - 16;
+    if (yb < 16) y <<= 16 - yb;
+    return y;
+  }
 }
 
 void ShadedSphere::initTables() {
@@ -348,7 +356,8 @@ SDL_Surface* ScoreCache::render(int newScore) {
     dirty = false;
     score = newScore;
     char s[256];
-    snprintf(s, sizeof(s), "Score: %d", score);
+    snprintf(s, sizeof(s), "%s: %d", title, score);
+    s[255] = 0;
     freeSurface();
     rendered = TTF_RenderText_Blended(font, s, SDL_Color{255, 255, 255});
   }
@@ -407,7 +416,7 @@ void blur(SDL_Surface *s, int frame) {
   blur(pb, right, down);
 }
 
-FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0) {
+FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0), highscoreCache("High score") {
   ShadedSphere::initTables();
 
   numTextures = (sizeof(imageNames) / sizeof(*imageNames)) - 1;
@@ -494,6 +503,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
   SDL_RWops *rwops = createFontOps();
   font = TTF_OpenFontRW(rwops, 1, fontSize);
   scoreCache.setFont(font);
+  highscoreCache.setFont(font);
   if (font) {
     drawProgressbar(target, currentStep++, numSteps);
     for (int i = 0; i < numRadii; ++i) {
@@ -570,7 +580,7 @@ SDL_Surface* FruitRenderer::renderText(const char *str, uint32_t color) {
   return TTF_RenderText_Blended(font, str, col);
 }
 
-void FruitRenderer::renderTitle(int taglineSelection) {
+void FruitRenderer::renderTitle(int taglineSelection, int fade) {
   const SDL_Rect *sprites = target->w < 640 ? titleSprites : hiresTitleSprites;
   SDL_Rect caption = sprites[0];
   int numTaglines = numTitleSprites - 1;
@@ -590,6 +600,7 @@ void FruitRenderer::renderTitle(int taglineSelection) {
   uint32_t *p = lock.pb.pixels;
   for (int y = 0; y < bottom; ++y) {
     int realAlpha = alpha >> 8;
+    if (realAlpha > 255) break;
     for (int x = 0; x < target->w; ++x) {
       p[x] = ablend(p[x], realAlpha);
     }
@@ -599,6 +610,49 @@ void FruitRenderer::renderTitle(int taglineSelection) {
   lock.unlock();
   SDL_BlitSurface(title, &caption, target, &captionTarget);
   SDL_BlitSurface(title, &tagline, target, &taglineTarget);
+}
+
+void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *background, uint32_t animationFrame) {
+  if (background) SDL_BlitSurface(background, nullptr, target, nullptr);
+  SDL_Surface *scoreText = scoreCache.render(score);
+  SDL_Surface *highscoreText = highscore > 0 ? highscoreCache.render(highscore) : nullptr;
+  if (scoreText) {
+    int hsw = highscoreText ? highscoreText->w : 0;
+    int hsh = highscoreText ? highscoreText->h : 0;
+    int x1 = static_cast<int>(offsetX-scoreText->w) >> 1;
+    int y1 = (planetDefs[0].y * 7 / 8 - scoreText->h) >> 1;
+    int x2 = target->w - max(scoreText->w, hsw) >> 1;
+    int y2 = (target->h - scoreText->h - hsh)  / 3;
+    int progress = animationFrame;
+    if (progress > 64) {
+      progress -= 64;
+      x1 = x2;
+    } else {
+      y2 = y1;
+    }
+    progress = clamp(0, 64, progress);  // 64
+    progress = smoothstep(progress, 6);
+    // progress = progress * progress * (3*64 - 2*progress) >> 3;  // 4096 * 64
+    // progress = progress * progress * (3*1024 - 2*progress) >> 15;  // 32768
+    // progress = progress * (64 - progress);
+    // progress = progress * (2048 - progress) >> 5;
+    SDL_Rect scorePos {
+      .x = static_cast<Sint16>(x1 + ((x2 - x1) * progress >> 16)),
+      .y = static_cast<Sint16>(y1 + ((y2 - y1) * progress >> 16)),
+    };
+
+    progress = smoothstep(clamp(0, 64, static_cast<int>(animationFrame) - 112), 6);
+    x1 = target->w;
+    y1 = y2;
+    SDL_Rect highscorePos {
+      .x = static_cast<Sint16>(x1 + ((x2 - x1) * progress >> 16)),
+      .y = static_cast<Sint16>(y1 + ((y2 - y1) * progress >> 16)),
+    };
+    highscorePos.y += scoreText->h;
+
+    SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
+    if (highscoreText) SDL_BlitSurface(highscoreText, nullptr, target, &highscorePos);
+  }
 }
 
 void FruitRenderer::renderBackground(SDL_Surface *background) {
@@ -774,16 +828,18 @@ void FruitRenderer::renderSelection(PixelBuffer pb, int left, int top, int right
   }
 }
 
-void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex) {
+void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex, bool skipScore) {
   Fruit *fruits = sim.getFruits();
-  int score = sim.getScore();
-  SDL_Surface *scoreText = scoreCache.render(score);
-  if (scoreText) {
-    SDL_Rect scorePos {
-      .x = static_cast<Sint16>(static_cast<int>(offsetX-scoreText->w) >> 1),
-      .y = static_cast<Sint16>((planetDefs[0].y * 7 / 8 - scoreText->h) >> 1),
-    };
-    SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
+  if (!skipScore) {
+    int score = sim.getScore();
+    SDL_Surface *scoreText = scoreCache.render(score);
+    if (scoreText) {
+      SDL_Rect scorePos {
+        .x = static_cast<Sint16>(static_cast<int>(offsetX-scoreText->w) >> 1),
+        .y = static_cast<Sint16>((planetDefs[0].y * 7 / 8 - scoreText->h) >> 1),
+      };
+      SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
+    }
   }
   // Render selection
   if (selection >= 0 && selection < numRadii) {

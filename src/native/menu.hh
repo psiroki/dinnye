@@ -20,6 +20,7 @@ class Menu {
   FruitRenderer &renderer;
   GameSettings &settings;
   uint32_t appearanceSeed;
+  uint32_t appearanceFrame;
 public:
   Menu(FruitRenderer &renderer, GameSettings &settings);
   ~Menu();
@@ -30,5 +31,6 @@ public:
   void render(SDL_Surface *target);
   inline void setAppearanceSeed(uint32_t newSeed) {
     appearanceSeed = newSeed;
+    appearanceFrame = 0;
   }
 };
