@@ -55,7 +55,7 @@ void printPercentile(T sum, int percentile, const char *name, const T (&arr)[N])
 }
 
 template <typename T, std::size_t N>
-void printPercentiles(const char *name, int start, const T (&arr)[N]) {
+void printPercentiles(const char *name, int start, const T (&arr)[N], std::ostream &os = std::cout) {
   T sum(sumArray(arr));
   printPercentile(sum, 95, name, arr);
   printPercentile(sum, 99, name, arr);
@@ -63,7 +63,46 @@ void printPercentiles(const char *name, int start, const T (&arr)[N]) {
   for (int i = start; i < N; ++i) {
     overSum += arr[i];
   }
-  std::cout << "Percentage over " << start/10 << "." << start%10 << ": " << (100.0f*overSum) / sum << "%" << std::endl;
+  os << "Percentage at or over " << start/10 << "." << start%10 << ": " << (100.0f*overSum) / sum << "%\n";
+}
+
+struct SectionTime {
+  const char *name;
+  Timestamp startTime;
+  uint64_t allMicros;
+  uint32_t maxMicros;
+  uint32_t count;
+  TimeHistogram histogram;
+
+  SectionTime(const char *name = nullptr): name(name), allMicros(0), maxMicros(0), count(0) { }
+
+  void start() {
+    startTime.reset();
+  }
+
+  uint64_t end() {
+    ++count;
+    uint64_t micros = startTime.elapsedMicros();
+    allMicros += micros;
+    if (micros > maxMicros) maxMicros = micros;
+    histogram.add(micros/100);
+    return micros;
+  }
+
+  void print(std::ostream &s = std::cout) const {
+    if (!count) {
+      s << "No " << name << " times reported\n";
+      return;
+    }
+    s << "max(" << name << ") micros: " << maxMicros << "\n";
+    s << "avg(" << name << ") micros: " << allMicros / count << "\n";
+    printPercentiles(name, 167, histogram.counts, s);
+  }
+};
+
+std::ostream& operator <<(std::ostream& s, const SectionTime &t) {
+  t.print(s);
+  return s;
 }
 
 enum class Control {
@@ -189,10 +228,14 @@ struct NextPlacement {
 
 enum class GameState { game, lost, menu };
 
+const uint32_t highscoreCap = 10;
+
 class Planets: private GameSettings {
   GameState state;
   GameState returnState;
   FruitSim sim;
+  Highscore highscores[highscoreCap];
+  uint32_t numHighscores;
   SDL_Surface *screen;
   SDL_Surface *background;
   SDL_Surface *snapshot;
@@ -215,16 +258,15 @@ class Planets: private GameSettings {
   int outlierIndex;
 
   uint32_t seed;
-  uint32_t simTime;
-  uint32_t renderTime;
   uint32_t simulationFrame;
   uint32_t blurFrame;
   uint32_t frameCounter;
-  uint32_t maxSimTime;
-  uint32_t maxRenderTime;
-  TimeHistogram renderTimeHistogram;
-  TimeHistogram simTimeHistogram;
-  TimeHistogram frameTimeHistogram;
+
+  SectionTime frameTime;
+  SectionTime gameFrame;
+  SectionTime blurTime;
+  SectionTime renderTime;
+  SectionTime simTime;
   const char * const configFilePath;
 
   bool running;
@@ -248,18 +290,22 @@ public:
       controls { },
       state(GameState::game),
       returnState(GameState::game),
+      numHighscores(0),
       outlierIndex(-1),
-      simTime(0),
-      renderTime(0),
+      frameTime("frame"),
+      gameFrame("gameFrame"),
+      blurTime("blur"),
+      renderTime("render"),
+      simTime("sim"),
       simulationFrame(0),
       frameCounter(0),
       blurFrame(0),
-      maxSimTime(0),
-      maxRenderTime(0),
       configFilePath(configFilePath) {
     std::cout << "Config file: " << configFilePath << std::endl;
   }
   void start();
+  void insertHighscore(int score);
+  void dumpHighscore();
 };
 
 void Planets::callAudioCallback(void *userData, uint8_t *stream, int len) {
@@ -424,6 +470,7 @@ void Planets::saveState() {
     state.outlierIndex = outlierIndex;
     state.simulationFrame = simulationFrame;
     state.score = sim.getScore();
+    state.numHighscores = numHighscores;
     state.numFruits = sim.getNumFruits();
     struct FileWriter: public Writer {
       std::ofstream &file;
@@ -447,7 +494,7 @@ void Planets::saveState() {
         }
       }
     } w(file, static_cast<uint64_t>(t)*1000000000ll + nsec);
-    state.write(sim.getFruits(), w);
+    state.write(sim.getFruits(), highscores, w);
     file.close();
   }
 }
@@ -484,15 +531,20 @@ void Planets::loadState() {
         }
       }
     } r(file, static_cast<uint64_t>(t)*1000000000ll + nsec);
-    state.read(sim.getFruits(), r);
+    RecordBuffer<Fruit> fruits(sim.getFruits(), sim.getMaxNumFruits());
+    RecordBuffer<Highscore> scores(highscores, highscoreCap);
+    bool success = state.read(fruits, scores, r);
     file.close();
 
-    next.ingest(state.next);
-    mixer.setFlagsMuted(state.audioFlagsMuted);
-    outlierIndex = state.outlierIndex;
-    simulationFrame = state.simulationFrame;
-    sim.setNumFruits(state.numFruits);
-    sim.setScore(state.score);
+    if (success) {
+      next.ingest(state.next);
+      mixer.setFlagsMuted(state.audioFlagsMuted);
+      outlierIndex = state.outlierIndex;
+      simulationFrame = state.simulationFrame;
+      sim.setNumFruits(state.numFruits);
+      sim.setScore(state.score);
+      numHighscores = state.numHighscores;
+    }
   }
 }
 
@@ -557,7 +609,7 @@ void Planets::initAudio() {
 }
 
 void Planets::simulate() {
-  Timestamp simStart;
+  simTime.start();
   if (state == GameState::game) next.step(sim);
 
   int popCountBefore = sim.getPopCount();
@@ -568,15 +620,11 @@ void Planets::simulate() {
     mixer.playSound(&pop);
 
   next.setupPreview(sim);
-  if (state == GameState::game) {
-    uint32_t simMicros = simStart.elapsedMicros();
-    simTime += simMicros;
-    if (simMicros > maxSimTime) maxSimTime = simMicros;
-    simTimeHistogram.add(simMicros/100);
-  }
+  if (state == GameState::game) simTime.end();
 }
 
 void Planets::renderGame() {
+  renderTime.start();
   Timestamp renderStart;
   SDL_BlitSurface(background, nullptr, screen, nullptr);
 
@@ -584,10 +632,7 @@ void Planets::renderGame() {
   int count = sim.getNumFruits();
   renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame);
 
-  uint32_t renderMicros = renderStart.elapsedMicros();
-  renderTime += renderMicros;
-  if (renderMicros > maxRenderTime) maxRenderTime = renderMicros;
-  renderTimeHistogram.add(renderMicros/100);
+  renderTime.end();
 }
 
 void Planets::start() {
@@ -647,14 +692,21 @@ void Planets::start() {
   while (running) {
     bool justLost = false;
     if (state == GameState::game && simulationFrame) {
+      bool savedLostState = outlierIndex >= 0;
       outlierIndex = sim.findGroundedOutside(simulationFrame);
       if (outlierIndex >= 0) {
         justLost = true;
+        if (!savedLostState) insertHighscore(sim.getScore());
         state = GameState::lost;
       }
     }
-    if (state == GameState::game) ++simulationFrame;
-    Timestamp frame;
+    if (state == GameState::game) {
+      ++simulationFrame;
+      gameFrame.start();
+    }
+
+    frameTime.start();
+    Timestamp frame(frameTime.startTime);
 
     GameState nextState = processInput(frame);
 
@@ -674,14 +726,20 @@ void Planets::start() {
     state = nextState;
 
     if ((state == GameState::menu || state == GameState::lost) && blurFrame > 0) {
-      blur(snapshot, --blurFrame);
+      blurTime.start();
+      for (int i = 0; i < 2 && blurFrame > 0; ++i) {
+        blur(snapshot, --blurFrame);
+      }
+      blurTime.end();
+    }
+
+    frameTime.end();
+    if (state == GameState::game) {
+      gameFrame.end();
     }
 
     // Update the screen
     SDL_Flip(screen);
-
-    uint32_t frameMicros = frame.elapsedMicros();
-    frameTimeHistogram.add(frameMicros/100);
 
 #ifndef BITTBOY
     // Cap the frame rate to ~100 FPS
@@ -690,19 +748,21 @@ void Planets::start() {
 #endif
     ++frameCounter;
   }
-  std::cout << "maxSimMicros: " << maxSimTime << std::endl;
-  std::cout << "maxRenderMicros: " << maxRenderTime << std::endl;
-  std::cout << "simMicros avg: " << simTime/simulationFrame << std::endl;
-  std::cout << "renderMicros avg: " << renderTime/simulationFrame << std::endl;
-  printPercentiles("sim", 167, simTimeHistogram.counts);
-  printPercentiles("render", 167, renderTimeHistogram.counts);
-  printPercentiles("frame", 167, frameTimeHistogram.counts);
+  std::cout << frameTime << std::endl;
+  std::cout << gameFrame << std::endl;
+  std::cout << blurTime << std::endl;
+  std::cout << renderTime << std::endl;
+  std::cout << simTime << std::endl;
 
   std::cout << std::endl;
   std::cout << "sphereCacheMisses: " << SphereCache::numCacheMisses << std::endl;
   std::cout << "sphereCacheAngleMisses: " << SphereCache::numCacheAngleMisses << std::endl;
   std::cout << "sphereCacheReassignMisses: " << SphereCache::numCacheReassignMisses << std::endl;
   std::cout << "sphereCacheHits: " << SphereCache::numCacheHits << std::endl;
+
+  if (numHighscores) {
+    dumpHighscore();
+  }
 
 #ifdef BITTBOY
   std::cout << std::endl;
@@ -732,6 +792,36 @@ void Planets::start() {
 
   saveState();
   SDL_Quit();
+}
+
+void Planets::insertHighscore(int score) {
+  int pos = numHighscores;
+  for (int i = 0; i < numHighscores; ++i) {
+    if (score > highscores[i].score) {
+      pos = i;
+      break;
+    }
+  }
+  if (pos < numHighscores) {
+    int numToMove = numHighscores - pos;
+    if (numHighscores >= highscoreCap) --numToMove;
+    if (numToMove) memmove(highscores + pos + 1, highscores + pos, sizeof(*highscores) * numToMove);
+  }
+  if (pos <= highscoreCap - 1) {
+    highscores[pos].score = score;
+    if (numHighscores < highscoreCap) ++numHighscores;
+  }
+}
+
+void Planets::dumpHighscore() {
+  const char *endings[] = { "th", "st", "nd", "rd" };
+  std::cout << "High scores:" << std::endl;
+  for (int i = 0; i < numHighscores; ++i) {
+    int rank = i + 1;
+    int m = rank % 100 / 10, d = rank % 10;
+    if (m == 1 || d > 3) d = 0;
+    std::cout << rank << endings[d] << " " << highscores[i].score << std::endl;
+  }
 }
 
 int main(int argc, char **argv) {

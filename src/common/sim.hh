@@ -298,6 +298,10 @@ class FruitSim {
 public:
   inline FruitSim() { }
 
+  inline int getMaxNumFruits() const {
+    return fruitCap;
+  }
+
   inline int getNumFruits() const {
     return numFruits;
   }

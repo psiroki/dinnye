@@ -205,11 +205,10 @@ int SphereCache::reassign(ShadedSphere *newSphere, int newRadius, bool newOutlie
 
 void SphereCache::release() {
   if (cache) SDL_FreeSurface(cache);
-  s = nullptr;
   cache = nullptr;
   radius = 0;
   angle = 0;
-  dirty = false;
+  dirty = true;
 }
 
 SDL_Surface* SphereCache::withAngle(int newAngle) {
@@ -379,7 +378,7 @@ void blur(SDL_Surface *s, int frame) {
   SurfaceLocker lock(s);
   PixelBuffer &pb(lock.pb);
   bool right = !!(frame & 1);
-  bool down = !!(frame & 2);
+  bool down = !!((frame+3) & 2);
   blur(pb, right, down);
 }
 
@@ -648,6 +647,10 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
     }
   }
   lock.unlock();
+  // these caches won't be needed anymore
+  for (int i = 0; i < numRadii; ++i) {
+    spheres[i].release();
+  }
 }
 
 void quickBlit(PixelBuffer src, PixelBuffer dst, int x, int y) {

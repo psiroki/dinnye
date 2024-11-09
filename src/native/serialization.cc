@@ -50,19 +50,26 @@ namespace s {
 
 }
 
-void SaveState::write(Fruit *fruits, Writer &writer) {
+void SaveState::write(Fruit *fruits, Highscore *highscores, Writer &writer) {
+  magicBytes = magicExpected;
   writer.write(reinterpret_cast<const uint32_t*>(this), sizeof(*this)+3 >> 2);
+  writer.write(reinterpret_cast<uint32_t*>(highscores), sizeof(Highscore)*numHighscores+3 >> 2);
   for (int i = 0; i < numFruits; ++i) {
     s::Fruit f(fruits[i]);
     writer.write(reinterpret_cast<const uint32_t*>(&f), sizeof(f)+3 >> 2);
   }
 }
 
-void SaveState::read(Fruit *fruits, Reader &reader) {
+bool SaveState::read(RecordBuffer<Fruit> &fruits, RecordBuffer<Highscore> &highscores, Reader &reader) {
   reader.read(reinterpret_cast<uint32_t*>(this), sizeof(*this)+3 >> 2);
+  if (magicBytes != magicExpected) return false;
+  if (numFruits > fruits.capacity) return false;
+  if (numHighscores > highscores.capacity) return false;
+  reader.read(reinterpret_cast<uint32_t*>(highscores.items), sizeof(Highscore)*numHighscores+3 >> 2);
   for (int i = 0; i < numFruits; ++i) {
     s::Fruit f;
     reader.read(reinterpret_cast<uint32_t*>(&f), sizeof(f)+3 >> 2);
-    f.setup(fruits[i]);
+    f.setup(fruits.items[i]);
   }
+  return true;
 }

@@ -74,8 +74,12 @@ class Timestamp {
   static uint64_t microsDiff(const timespec &a, const timespec &b);
 public:
   Timestamp();
+  inline Timestamp(const Timestamp &other): time(other.time) { }
+  /// Sets the Timestamp object to the current time
   void reset();
+  /// Sets the Timestamp object to the current time plus the given seconds
   void resetWithDelta(float deltaSeconds);
+  /// Calculates the elapsed microseconds now since the time the Timestamp object holds
   uint64_t elapsedMicros(bool reset = false);
   float elapsedSeconds(bool reset = false);
   float secondsTo(const Timestamp &other);
