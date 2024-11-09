@@ -6,7 +6,7 @@
 #include "image.hh"
 #include "font.hh"
 
-#ifdef BITTBOY
+#if defined(BITTBOY) || defined(LOREZ)
 #define USE_QUICKBLIT
 #endif
 
@@ -20,7 +20,7 @@ int SphereCache::numCacheMisses = 0;
 int SphereCache::numCacheAngleMisses = 0;
 int SphereCache::numCacheReassignMisses = 0;
 
-#ifdef BITTBOY
+#if defined(BITTBOY) || defined(LOREZ)
 const unsigned TEXTURE_COORD_BITS = 7;
 #else
 const unsigned TEXTURE_COORD_BITS = 9;
@@ -115,6 +115,31 @@ namespace {
 #ifdef FIXED
   Fixed sinLookup[65536];
 #endif
+  const SDL_Rect hiresTitleSprites[] = {
+    { .x = 0, .y = 0, .w = 640, .h = 123, },
+    { .x = 95, .y = 128, .w = 451, .h = 21, },
+    { .x = 110, .y = 157, .w = 421, .h = 20, },
+    { .x = 92, .y = 185, .w = 456, .h = 15, },
+    { .x = 154, .y = 212, .w = 334, .h = 20, },
+    { .x = 99, .y = 240, .w = 443, .h = 20, },
+    { .x = 124, .y = 268, .w = 394, .h = 20, },
+    { .x = 91, .y = 295, .w = 457, .h = 21, },
+    { .x = 155, .y = 323, .w = 330, .h = 21, },
+    { .x = 108, .y = 352, .w = 426, .h = 20, },
+  };
+  const SDL_Rect titleSprites[] = {
+    { .x = 0, .y = 0, .w = 320, .h = 61, },
+    { .x = 47, .y = 64, .w = 227, .h = 11, },
+    { .x = 54, .y = 78, .w = 212, .h = 11, },
+    { .x = 46, .y = 92, .w = 229, .h = 9, },
+    { .x = 76, .y = 106, .w = 168, .h = 11, },
+    { .x = 49, .y = 120, .w = 222, .h = 11, },
+    { .x = 61, .y = 134, .w = 198, .h = 11, },
+    { .x = 45, .y = 147, .w = 230, .h = 11, },
+    { .x = 77, .y = 161, .w = 166, .h = 11, },
+    { .x = 54, .y = 175, .w = 214, .h = 11, },
+  };
+  const int numTitleSprites = sizeof(titleSprites) / sizeof(*titleSprites);
 }
 
 void ShadedSphere::initTables() {
@@ -388,11 +413,14 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
   numTextures = (sizeof(imageNames) / sizeof(*imageNames)) - 1;
   textures = new SDL_Surface*[numTextures];
 
+  int numSteps = numTextures + 3;
+  int currentStep = 0;
+
   for (int i = 0; i < numTextures; ++i)
     textures[i] = nullptr;
   
   for (int i = 0; i < numTextures; ++i) {
-    drawProgressbar(target, i, numTextures + 2);
+    drawProgressbar(target, currentStep++, numSteps);
     textures[i] = loadImage(imageNames[i]);
 #ifdef RED_BLUE_SWAP
     SDL_LockSurface(textures[i]);
@@ -467,7 +495,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
   font = TTF_OpenFontRW(rwops, 1, fontSize);
   scoreCache.setFont(font);
   if (font) {
-    drawProgressbar(target, numTextures, numTextures + 2);
+    drawProgressbar(target, currentStep++, numSteps);
     for (int i = 0; i < numRadii; ++i) {
       const char *name = imageNames[i];
       PlanetDefinition &def(planetDefs[i]);
@@ -490,18 +518,21 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
     }
   }
 
-  drawProgressbar(target, numTextures + 1, numTextures + 2);
+  drawProgressbar(target, currentStep++, numSteps);
   shading = new uint32_t[TEXTURE_SIZE*TEXTURE_SIZE];
   PixelBuffer pb(TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, shading);
   renderSphereLightmap(pb);
 
-  drawProgressbar(target, numTextures + 2, numTextures + 2);
+  drawProgressbar(target, currentStep++, numSteps);
   sphereDefs = new ShadedSphere[numTextures];
   for (int i = 0; i < numTextures; ++i) {
     ShadedSphere &s(sphereDefs[i]);
     s.albedo = textures[i];
     s.shading = shading;
   }
+
+  drawProgressbar(target, currentStep++, numSteps);
+  title = loadImage("assets/title.png");
 }
 
 FruitRenderer::~FruitRenderer() {
@@ -514,6 +545,10 @@ FruitRenderer::~FruitRenderer() {
       SDL_FreeSurface(textures[i]);
       textures[i] = nullptr;
     }
+  }
+  if (title) {
+    SDL_FreeSurface(title);
+    title = nullptr;
   }
   for (int i = 0; i < numRadii; ++i) {
     SDL_Surface *s = planetDefs[i].nameText;
@@ -533,6 +568,37 @@ SDL_Surface* FruitRenderer::renderText(const char *str, uint32_t color) {
   col.g = (color >> 8) & 0xFF;
   col.b = color & 0xFF;
   return TTF_RenderText_Blended(font, str, col);
+}
+
+void FruitRenderer::renderTitle(int taglineSelection) {
+  const SDL_Rect *sprites = target->w < 640 ? titleSprites : hiresTitleSprites;
+  SDL_Rect caption = sprites[0];
+  int numTaglines = numTitleSprites - 1;
+  SDL_Rect tagline = sprites[taglineSelection % numTaglines + 1];
+  SDL_Rect captionTarget {
+    .x = static_cast<Sint16>(target->w - caption.w >> 1),
+    .y = static_cast<Sint16>(target->h/3 - (caption.h + tagline.h) >> 1),
+  };
+  SDL_Rect taglineTarget {
+    .x = static_cast<Sint16>(target->w - tagline.w >> 1),
+    .y = static_cast<Sint16>(captionTarget.y + caption.h),
+  };
+  int bottom = (taglineTarget.y + tagline.h)*5 >> 2;
+  int increment = 256*256 / bottom;
+  int alpha = 0;
+  SurfaceLocker lock(target);
+  uint32_t *p = lock.pb.pixels;
+  for (int y = 0; y < bottom; ++y) {
+    int realAlpha = alpha >> 8;
+    for (int x = 0; x < target->w; ++x) {
+      p[x] = ablend(p[x], realAlpha);
+    }
+    p += lock.pb.pitch;
+    alpha += increment;
+  }
+  lock.unlock();
+  SDL_BlitSurface(title, &caption, target, &captionTarget);
+  SDL_BlitSurface(title, &tagline, target, &taglineTarget);
 }
 
 void FruitRenderer::renderBackground(SDL_Surface *background) {

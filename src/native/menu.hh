@@ -19,6 +19,7 @@ class Menu {
   Submenu *current;
   FruitRenderer &renderer;
   GameSettings &settings;
+  uint32_t appearanceSeed;
 public:
   Menu(FruitRenderer &renderer, GameSettings &settings);
   ~Menu();
@@ -27,4 +28,7 @@ public:
   void moveHorizontal(int delta);
   Command execute();
   void render(SDL_Surface *target);
+  inline void setAppearanceSeed(uint32_t newSeed) {
+    appearanceSeed = newSeed;
+  }
 };

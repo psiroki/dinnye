@@ -722,6 +722,8 @@ void Planets::start() {
     if (state != nextState && nextState == GameState::menu) {
       SDL_BlitSurface(screen, nullptr, snapshot, nullptr);
       blurFrame = 32;
+      timespec t = frame.getTime();
+      menu->setAppearanceSeed(t.tv_nsec + t.tv_sec);
     }
     state = nextState;
 

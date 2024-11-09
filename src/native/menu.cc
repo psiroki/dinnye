@@ -103,7 +103,7 @@ void Submenu::moveVertical(int delta) {
 
 void Submenu::render(SDL_Surface *target, GameSettings &settings) {
   int x = (target->w - maxWidth) >> 1;
-  int startY = (target->h - sumHeight - numMenuItems) >> 1;
+  int startY = (target->h - sumHeight - numMenuItems) * 2 / 3;
   int y = startY;
   int top = y;
   int bottom = y;
@@ -114,35 +114,6 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings) {
     uint32_t meaning = items[i].meaning;
     if (meaning == Meaning::music || meaning == Meaning::sound) {
       bool enabled = meaning == Meaning::music ? settings.isMusicEnabled() : settings.isSoundEnabled();
-/*      SDL_Rect frame {
-        .x = static_cast<Sint16>(x - height),
-        .y = static_cast<Sint16>(y),
-        .w = static_cast<Uint16>(height * 2 / 3),
-        .h = static_cast<Uint16>(height)
-      };
-      uint32_t col = 0xFFFFFFFFu;
-      if (enabled) {
-        SDL_FillRect(target, &frame, col);
-      } else {
-        const uint32_t thickness = 1;
-        SDL_Rect r = frame;
-        r.h = thickness;
-        SDL_FillRect(target, &r, col);
-        frame.y += thickness;
-        frame.h -= thickness;
-        r = frame;
-        r.w = thickness;
-        SDL_FillRect(target, &r, col);
-        r = frame;
-        r.x += r.w - thickness;
-        r.w = thickness;
-        SDL_FillRect(target, &r, col);
-        frame.y += frame.h - thickness * 2;
-        frame.h = thickness;
-        frame.x += thickness;
-        frame.w -= thickness * 2;
-        SDL_FillRect(target, &frame, col);
-      }*/
     }
     if (i == selection) top = y;
     y += height + 1;
@@ -211,5 +182,6 @@ Command Menu::execute() {
 }
 
 void Menu::render(SDL_Surface *target) {
+  renderer.renderTitle(appearanceSeed);
   current->render(target, settings);
 }

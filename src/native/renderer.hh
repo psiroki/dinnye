@@ -185,6 +185,7 @@ class FruitRenderer {
   int fontSize;
   TTF_Font *font;
   ScoreCache scoreCache;
+  SDL_Surface *title;
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
@@ -196,6 +197,7 @@ public:
     sizeY = sim.getWorldHeight();
   }
   SDL_Surface* renderText(const char *str, uint32_t color);
+  void renderTitle(int taglineSelection);
   void renderBackground(SDL_Surface *background);
   void renderSelection(PixelBuffer pb, int left, int top, int right, int bottom, int shift, bool hollow = false);
   void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex);
