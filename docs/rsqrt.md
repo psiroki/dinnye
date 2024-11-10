@@ -31,10 +31,10 @@ If we take the base-2 logarithm of $x$, it's essentially just a negation and a d
 This is effective, but now I need to quickly calculate the logarithm of a floating-point number.
 This can be done efficiently if we understand how floating-point numbers are represented:
 - The highest bit is the sign bit. Since we assume $x$ is always valid, this is 0 (indicating positive).
-- This is followed by 8 exponent bits (we'll call this $c$ in formulas, since $e$ could be ambigious)
+- This is followed by 8 exponent bits (let's call it $x_e$, but we'll use $c$ in formulas: $c = x_e - 128$)
 - Finally, there are 23 mantissa bits (treated as a 23-bit integer, denoted as $m$)
 
-The real value of a positive float $x$ is then represented as: $x = 2^{c-128}(1+m \cdot 2^{-23})$
+The real value of a positive float $x$ is then represented as: $x = 2^{c}(1+m \cdot 2^{-23})$
 
 The logarithm of this is $\log_2 x = c + \log_2(1 + m \cdot 2^{-23})$. The second logarithmic term will yield a value between 0 and 1,
 as its parameter is between 1 and 2. To approximate, we can simplify this as: $\log_2 x \approx c + m \cdot 2^{-23}$ (using the approximation $\log_2 y \approx y - 1$ for $1 \le y \le 2$).
