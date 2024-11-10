@@ -45,8 +45,9 @@ class Submenu {
   int sumHeight;
   SDL_Surface **captions;
   FruitRenderer &renderer;
+  bool resumeWasPossible;
 
-  void adjustSelection();
+  void adjustSelection(int movement, bool resumePossible = true);
 public:
   Submenu(const MenuItem *items, FruitRenderer &renderer);
   ~Submenu();
@@ -55,11 +56,11 @@ public:
   inline const MenuItem* getSelection() {
     return items + selection;
   }
-  void render(SDL_Surface *target, GameSettings &settings);
+  void render(SDL_Surface *target, GameSettings &settings, bool resumePossible);
 };
 
 Submenu::Submenu(const MenuItem *items, FruitRenderer &renderer):
-    items(items), renderer(renderer), captions(nullptr), selection(0) {
+    items(items), renderer(renderer), captions(nullptr), selection(0), resumeWasPossible(true) {
   for (numMenuItems = 0; items[numMenuItems].caption; ++numMenuItems);
   captions = new SDL_Surface*[numMenuItems];
   maxWidth = 0;
@@ -70,7 +71,7 @@ Submenu::Submenu(const MenuItem *items, FruitRenderer &renderer):
     if (s->w > maxWidth) maxWidth = s->w;
     sumHeight += s->h;
   }
-  adjustSelection();
+  adjustSelection(0);
 }
 
 Submenu::~Submenu() {
@@ -82,32 +83,39 @@ Submenu::~Submenu() {
 }
 
 
-void Submenu::adjustSelection() {
-  while (items[selection].meaning == Meaning::passive) {
-    ++selection;
+void Submenu::adjustSelection(int movement, bool resumePossible) {
+  if (!movement) movement = 1;
+  while (items[selection].meaning == Meaning::passive || !resumePossible && items[selection].meaning == Meaning::resume) {
+    selection += movement;
     if (selection >= numMenuItems) selection = 0;
+    if (selection < 0) selection += numMenuItems;
   }
 }
 
 void Submenu::reset() {
   selection = 0;
-  adjustSelection();
+  resumeWasPossible = true;
+  adjustSelection(0);
 }
 
 void Submenu::moveVertical(int delta) {
   selection += delta;
   selection %= numMenuItems;
   if (selection < 0) selection += numMenuItems;
-  adjustSelection();
+  adjustSelection(delta, resumeWasPossible);
 }
 
-void Submenu::render(SDL_Surface *target, GameSettings &settings) {
+void Submenu::render(SDL_Surface *target, GameSettings &settings, bool resumePossible) {
+  resumeWasPossible = resumePossible;
+  if (!resumePossible) adjustSelection(0, resumePossible);
   int x = (target->w - maxWidth) >> 1;
-  int startY = (target->h - sumHeight - numMenuItems) * 2 / 3;
+  int shownMenuItems = numMenuItems - (resumePossible ? 0 : 1);
+  int startY = (target->h - sumHeight - shownMenuItems) * 2 / 3;
   int y = startY;
   int top = y;
   int bottom = y;
   for (int i = 0; i < numMenuItems; ++i) {
+    if (!resumePossible && items[i].meaning == Meaning::resume) continue;
     SDL_Rect rect { .x = static_cast<Sint16>(x), .y = static_cast<Sint16>(y) };
     SDL_BlitSurface(captions[i], nullptr, target, &rect);
     int height = captions[i]->h;
@@ -122,6 +130,7 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings) {
   SurfaceLocker locker(target);
   y = startY;
   for (int i = 0; i < numMenuItems; ++i) {
+    if (!resumePossible && items[i].meaning == Meaning::resume) continue;
     int height = captions[i]->h;
     uint32_t meaning = items[i].meaning;
     if (meaning == Meaning::music || meaning == Meaning::sound) {
@@ -181,7 +190,7 @@ Command Menu::execute() {
   return Command::nop;
 }
 
-void Menu::render(SDL_Surface *target) {
+void Menu::render(SDL_Surface *target, bool resumePossible) {
   renderer.renderTitle(appearanceSeed, appearanceFrame++);
-  current->render(target, settings);
+  current->render(target, settings, resumePossible);
 }

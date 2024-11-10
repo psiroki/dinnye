@@ -612,8 +612,19 @@ void FruitRenderer::renderTitle(int taglineSelection, int fade) {
   SDL_BlitSurface(title, &tagline, target, &taglineTarget);
 }
 
-void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *background, uint32_t animationFrame) {
-  if (background) SDL_BlitSurface(background, nullptr, target, nullptr);
+void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *background, int animationFrame) {
+  if (background) {
+    SDL_BlitSurface(background, nullptr, target, nullptr);
+    int bgMul = 255-clamp(0, 128, animationFrame * 2);
+    SurfaceLocker locker(target);
+    uint32_t *p = locker.pb.pixels;
+    for (int y = 0; y < locker.pb.height; ++y) {
+      for (int x = 0; x < locker.pb.width; ++x) {
+        p[x] = ablend(p[x], bgMul);
+      }
+      p += locker.pb.pitch;
+    }
+  }
   SDL_Surface *scoreText = scoreCache.render(score);
   SDL_Surface *highscoreText = highscore > 0 ? highscoreCache.render(highscore) : nullptr;
   if (scoreText) {
@@ -621,7 +632,7 @@ void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *back
     int hsh = highscoreText ? highscoreText->h : 0;
     int x1 = static_cast<int>(offsetX-scoreText->w) >> 1;
     int y1 = (planetDefs[0].y * 7 / 8 - scoreText->h) >> 1;
-    int x2 = target->w - max(scoreText->w, hsw) >> 1;
+    int x2 = target->w - scoreText->w >> 1;
     int y2 = (target->h - scoreText->h - hsh)  / 3;
     int progress = animationFrame;
     if (progress > 64) {
@@ -643,6 +654,7 @@ void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *back
 
     progress = smoothstep(clamp(0, 64, static_cast<int>(animationFrame) - 112), 6);
     x1 = target->w;
+    x2 = target->w - hsw >> 1;
     y1 = y2;
     SDL_Rect highscorePos {
       .x = static_cast<Sint16>(x1 + ((x2 - x1) * progress >> 16)),
@@ -652,6 +664,25 @@ void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *back
 
     SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
     if (highscoreText) SDL_BlitSurface(highscoreText, nullptr, target, &highscorePos);
+  }
+}
+
+void FruitRenderer::renderMenuScores(int score, int highscore) {
+  SDL_Surface *scoreText = scoreCache.render(score);
+  int scoreMargin = scoreText->h >> 2;
+  SDL_Rect scorePos {
+    .x = static_cast<Sint16>(scoreMargin),
+    .y = static_cast<Sint16>(target->h - scoreText->h - scoreMargin),
+  };
+  SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
+  SDL_Surface *highscoreText = highscore > 0 ? highscoreCache.render(highscore) : nullptr;
+  if (highscoreText) {
+    int highscoreMargin = highscoreText->h >> 2;
+    SDL_Rect highscorePos {
+      .x = static_cast<Sint16>(target->w - highscoreText->w - highscoreMargin),
+      .y = static_cast<Sint16>(target->h - highscoreText->h - highscoreMargin),
+    };
+  SDL_BlitSurface(highscoreText, nullptr, target, &highscorePos);
   }
 }
 

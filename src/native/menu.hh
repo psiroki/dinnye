@@ -28,7 +28,7 @@ public:
   void moveVertical(int delta);
   void moveHorizontal(int delta);
   Command execute();
-  void render(SDL_Surface *target);
+  void render(SDL_Surface *target, bool resumePossible);
   inline void setAppearanceSeed(uint32_t newSeed) {
     appearanceSeed = newSeed;
     appearanceFrame = 0;

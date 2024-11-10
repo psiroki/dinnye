@@ -231,6 +231,9 @@ enum class GameState { game, lost, menu };
 const uint32_t highscoreCap = 10;
 
 class Planets: private GameSettings {
+  static const int numBlurFrames = 16;
+  static const int numBlurCallsPerFrame = 2;
+
   GameState state;
   GameState returnState;
   FruitSim sim;
@@ -256,11 +259,11 @@ class Planets: private GameSettings {
   Scalar offsetX;
 
   int outlierIndex;
-  uint32_t loseAnimationFrame;
+  int loseAnimationFrame;
 
   uint32_t seed;
   uint32_t simulationFrame;
-  uint32_t blurFrame;
+  uint32_t blurCallsLeft;
   uint32_t frameCounter;
 
   SectionTime frameTime;
@@ -300,7 +303,7 @@ public:
       simTime("sim"),
       simulationFrame(0),
       frameCounter(0),
-      blurFrame(0),
+      blurCallsLeft(0),
       configFilePath(configFilePath) {
     std::cout << "Config file: " << configFilePath << std::endl;
   }
@@ -409,7 +412,7 @@ GameState Planets::processInput(const Timestamp &frame) {
           running = false;
           break;
         case Command::resume:
-          nextState = returnState;
+          if (returnState != GameState::lost) nextState = returnState;
           break;
         case Command::reset:
           sim.newGame();
@@ -435,7 +438,7 @@ GameState Planets::processInput(const Timestamp &frame) {
         menu->reset();
         break;
       case GameState::menu:
-        nextState = returnState;
+        if (returnState != GameState::lost) nextState = returnState;
         break;
     }
   }
@@ -697,6 +700,7 @@ void Planets::start() {
       outlierIndex = sim.findGroundedOutside(simulationFrame);
       if (outlierIndex >= 0) {
         justLost = true;
+        loseAnimationFrame = 0;
         state = GameState::lost;
         if (!savedLostState) insertHighscore(sim.getScore());
       }
@@ -718,16 +722,19 @@ void Planets::start() {
     } else {
       SDL_BlitSurface(snapshot, nullptr, screen, nullptr);
       if (state == GameState::menu) {
-        menu->render(screen);
+        menu->render(screen, returnState != GameState::lost);
+        if (returnState == GameState::lost) {
+          renderer->renderMenuScores(sim.getScore(), highscores[0].score);
+        }
       } else {
         renderer->renderLostScreen(sim.getScore(), highscores[0].score, snapshot, loseAnimationFrame++);
       }
     }
 
     if (state != nextState && nextState == GameState::menu || justLost) {
-      if (state != GameState::lost || justLost) {
+      if (nextState == GameState::menu || justLost) {
         SDL_BlitSurface(screen, nullptr, snapshot, nullptr);
-        blurFrame = 32;
+        if (nextState == GameState::menu) blurCallsLeft = numBlurCallsPerFrame * numBlurFrames;
       }
       timespec t = frame.getTime();
       menu->setAppearanceSeed(t.tv_nsec + t.tv_sec);
@@ -737,10 +744,10 @@ void Planets::start() {
     }
     state = nextState;
 
-    if ((state == GameState::menu || state == GameState::lost) && blurFrame > 0) {
+    if (state == GameState::menu && blurCallsLeft > 0) {
       blurTime.start();
-      for (int i = 0; i < 2 && blurFrame > 0; ++i) {
-        blur(snapshot, --blurFrame);
+      for (int i = 0; i < numBlurCallsPerFrame && blurCallsLeft > 0; ++i) {
+        blur(snapshot, --blurCallsLeft);
       }
       blurTime.end();
     }
