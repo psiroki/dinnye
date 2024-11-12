@@ -116,7 +116,7 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings, bool resumePos
   int bottom = y;
   for (int i = 0; i < numMenuItems; ++i) {
     if (!resumePossible && items[i].meaning == Meaning::resume) continue;
-    SDL_Rect rect { .x = static_cast<Sint16>(x), .y = static_cast<Sint16>(y) };
+    SDL_Rect rect = makeRect(x, y);
     SDL_BlitSurface(captions[i], nullptr, target, &rect);
     int height = captions[i]->h;
     uint32_t meaning = items[i].meaning;

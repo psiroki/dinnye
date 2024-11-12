@@ -10,6 +10,8 @@
 #define USE_QUICKBLIT
 #endif
 
+extern Platform platform;
+
 const Scalar pi = Scalar(float(M_PI));
 
 // Uncomment this if the red and blue seems to be swapped
@@ -214,18 +216,12 @@ int SphereCache::reassign(ShadedSphere *newSphere, int newRadius, bool newOutlie
   if (radius != newRadius || outlier != newOutlier) {
     outlier = newOutlier;
     radius = newRadius;
-    if (cache) SDL_FreeSurface(cache);
+    if (cache) {
+      SDL_FreeSurface(cache);
+      cache = nullptr;
+    }
     int extra = outlier ? 2 : 0;
-    cache = SDL_CreateRGBSurface(
-      SDL_SWSURFACE,
-      newRadius*2+1+extra, // Width of the image
-      newRadius*2+1+extra, // Height of the image
-      32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
-      0x00ff0000, // Red mask
-      0x0000ff00, // Green mask
-      0x000000ff, // Blue mask
-      0xff000000  // Alpha mask
-    );
+    cache = platform.createSurface(newRadius*2+1+extra, newRadius*2+1+extra);
 #ifdef BITTBOY
     SDL_SetColorKey(cache, SDL_SRCCOLORKEY, 0);
 #endif
@@ -336,7 +332,7 @@ void drawProgressbar(SDL_Surface *target, int position, int numSteps) {
     r.h -= 4;
     SDL_FillRect(target, &r, 0xFF000000u);
   }
-  SDL_Flip(target);
+  platform.present();
 }
 
 ScoreCache::~ScoreCache() {
@@ -446,16 +442,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
     if (textures[i]->w > TEXTURE_SIZE) {
       SDL_LockSurface(textures[i]);
       PixelBuffer t(textures[i]);
-      SDL_Surface *surface = SDL_CreateRGBSurface(
-            SDL_SWSURFACE,
-            TEXTURE_SIZE, // Width of the image
-            TEXTURE_SIZE, // Height of the image
-            32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
-            0x000000ff, // Red mask
-            0x0000ff00, // Green mask
-            0x00ff0000, // Blue mask
-            0xff000000  // Alpha mask
-          );
+      SDL_Surface *surface =  platform.createSurface(TEXTURE_SIZE, TEXTURE_SIZE);
       SDL_LockSurface(surface);
       PixelBuffer target(surface);
       for (int y = 0; y < TEXTURE_SIZE; ++y) {
@@ -543,6 +530,7 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
 
   drawProgressbar(target, currentStep++, numSteps);
   title = loadImage("assets/title.png");
+  platform.makeOpaque(title, false);
 }
 
 FruitRenderer::~FruitRenderer() {
@@ -563,6 +551,7 @@ FruitRenderer::~FruitRenderer() {
   for (int i = 0; i < numRadii; ++i) {
     SDL_Surface *s = planetDefs[i].nameText;
     if (s) SDL_FreeSurface(s);
+    planetDefs[i].nameText = nullptr;
   }
   delete[] textures;
   textures = nullptr;

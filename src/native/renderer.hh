@@ -1,9 +1,8 @@
 #pragma once
 
-#include <SDL/SDL.h>
-#include <SDL/SDL_ttf.h>
 #include <stdint.h>
 
+#include "platform.hh"
 #include "../common/sim.hh"
 
 template <typename T> T min(T a, T b) {

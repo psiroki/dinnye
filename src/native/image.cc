@@ -20,6 +20,8 @@ SDL_Surface* loadImageFromMemory(const void* contents, int size) {
     return finishLoad(data, width, height, channels);
 }
 
+extern Platform platform;
+
 static SDL_Surface* finishLoad(unsigned char *data, int width, int height, int channels) {
     if (data == NULL) {
         fprintf(stderr, "Failed to load image: %s\n", stbi_failure_reason());
@@ -46,9 +48,11 @@ static SDL_Surface* finishLoad(unsigned char *data, int width, int height, int c
     }
 
     // Free the original data when the SDL_Surface is freed
-    SDL_Surface* optimizedSurface = SDL_DisplayFormatAlpha(surface);
+    SDL_Surface* optimizedSurface = platform.displayFormat(surface);
     SDL_FreeSurface(surface);
+    surface = optimizedSurface;
+
     stbi_image_free(data);
 
-    return optimizedSurface;
+    return surface;
 }

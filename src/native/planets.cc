@@ -1,5 +1,3 @@
-#include <SDL/SDL.h>
-#include <SDL/SDL_ttf.h>
 #include <iostream>
 #include <fstream>
 #include <time.h>
@@ -12,6 +10,7 @@
 #endif
 
 #include "../common/sim.hh"
+#include "platform.hh"
 #include "serialization.hh"
 #include "renderer.hh"
 #include "util.hh"
@@ -135,33 +134,6 @@ struct ControlState {
 
 inline int32_t bitExtend(int16_t val) {
   return val;
-}
-
-// Initialize SDL and create a window with the specified dimensions
-SDL_Surface *initSDL(int width, int height) {
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-    std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
-    return nullptr;
-  }
-
-  TTF_Init();
-
-  bool fullscreen = width == 0 || height == 0;
-  if (fullscreen) {
-    const SDL_VideoInfo *videoInfo = SDL_GetVideoInfo();
-    width = videoInfo->current_w;
-    height = videoInfo->current_h;
-  }
-
-  SDL_Surface *screen = SDL_SetVideoMode(width, height, 32, SDL_HWSURFACE |
-      SDL_DOUBLEBUF |
-      (fullscreen ? SDL_FULLSCREEN : 0));
-  if (screen == nullptr) {
-    std::cerr << "Failed to set video mode: " << SDL_GetError() << std::endl;
-    return nullptr;
-  }
-
-  return screen;
 }
 
 struct NextPlacement {
@@ -593,9 +565,6 @@ void Planets::initAudio() {
   desiredAudioSpec.userdata = this;
   desiredAudioSpec.callback = callAudioCallback;
   memcpy(&actualAudioSpec, &desiredAudioSpec, sizeof(actualAudioSpec));
-  char log[256] { 0 };
-  SDL_AudioDriverName(log, sizeof(log));
-  std::cerr << "Audio driver: " << log << std::endl;
   std::cerr << "Opening audio device" << std::endl;
   if (SDL_OpenAudio(&desiredAudioSpec, &actualAudioSpec)) {
     std::cerr << "Failed to set up audio. Running without it." << std::endl;
@@ -639,15 +608,19 @@ void Planets::renderGame() {
   renderTime.end();
 }
 
+Platform platform;
+
 void Planets::start() {
 #if defined(BITTBOY)
 #pragma message "BittBoy build"
-  screen = initSDL(0, 0);
+  screen = platform.initSDL(0, 0);
   SDL_ShowCursor(false);
 #elif defined(LOREZ)
-  screen = initSDL(320, 240);
+  screen = platform.initSDL(320, 240);
+#elif defined(MIYOOA30)
+  screen = platform.initSDL(480, 640, 3);
 #else
-  screen = initSDL(640, 480);
+  screen = platform.initSDL(640, 480);
 #endif
   if (!screen) return;
 
@@ -662,6 +635,7 @@ void Planets::start() {
   sim.init(seed);
   sim.setGravity(Scalar(0.0078125f * 0.5f));
 
+  std::cout << screen->w << "x" << screen->h << std::endl;
   zoom = screen->h / (sim.getWorldHeight() + Scalar(2));
   rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
   centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
@@ -672,19 +646,20 @@ void Planets::start() {
 
   loadState();
   
-  snapshot = SDL_DisplayFormat(screen);
+  snapshot = platform.displayFormat(screen);
+  platform.makeOpaque(snapshot);
   background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
-  SDL_Surface *backgroundScreen = SDL_DisplayFormat(screen);
+  SDL_Surface *backgroundScreen = platform.displayFormat(screen);
   if (background->w < backgroundScreen->w || background->h < backgroundScreen->h)
     SDL_FillRect(backgroundScreen, nullptr, 0);
-  SDL_Rect bgPos = {
-    .x = static_cast<Sint16>((backgroundScreen->w - background->w) / 2),
-    .y = static_cast<Sint16>((backgroundScreen->h - background->h) / 2),
-  };
+  SDL_Rect bgPos = makeRect(
+    (backgroundScreen->w - background->w) / 2,
+    (backgroundScreen->h - background->h) / 2
+  );
   SDL_BlitSurface(background, nullptr, backgroundScreen, &bgPos);
   SDL_FreeSurface(background);
   background = backgroundScreen;
-  SDL_SetAlpha(background, 0, 255);
+  platform.makeOpaque(background);
 
   renderer = new FruitRenderer(screen);
   menu = new Menu(*renderer, *this);
@@ -757,8 +732,19 @@ void Planets::start() {
       gameFrame.end();
     }
 
+#ifdef USE_SDL2
+    // SurfaceLocker lock(screen);
+    // for (int y = 0; y < lock.pb.height; y += 2) {
+    //   uint32_t *line = lock.pb.pixels + y * lock.pb.pitch;
+    //   for (int x = 0; x < lock.pb.width; x += 2) {
+    //     line[x] = 0xFF0000FFu ^ x ^ y;
+    //   }
+    // }
+    // lock.unlock();
+#endif
+
     // Update the screen
-    SDL_Flip(screen);
+    platform.present();
 
 #ifndef BITTBOY
     // Cap the frame rate to ~100 FPS

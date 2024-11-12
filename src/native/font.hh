@@ -1,5 +1,5 @@
 #pragma once
 
-#include <SDL/SDL.h>
+#include "platform.hh"
 
 SDL_RWops* createFontOps();
