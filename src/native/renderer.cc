@@ -783,7 +783,7 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
       }
       col = ncol;
 #endif
-      line[x] = col;
+      line[x] = col | 0xFF000000u;
     }
   }
   lock.unlock();

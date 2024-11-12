@@ -238,6 +238,8 @@ class Planets: private GameSettings {
   uint32_t blurCallsLeft;
   uint32_t frameCounter;
 
+  SectionTime flipTime;
+  SectionTime eventTime;
   SectionTime frameTime;
   SectionTime gameFrame;
   SectionTime blurTime;
@@ -273,6 +275,8 @@ public:
       blurTime("blur"),
       renderTime("render"),
       simTime("sim"),
+      flipTime("flip"),
+      eventTime("events"),
       simulationFrame(0),
       frameCounter(0),
       blurCallsLeft(0),
@@ -669,6 +673,7 @@ void Planets::start() {
   Fruit *fruits;
 
   while (running) {
+    frameTime.start();
     bool justLost = false;
     if (state == GameState::game && simulationFrame) {
       bool savedLostState = outlierIndex >= 0;
@@ -685,10 +690,11 @@ void Planets::start() {
       gameFrame.start();
     }
 
-    frameTime.start();
     Timestamp frame(frameTime.startTime);
 
+    eventTime.start();
     GameState nextState = processInput(frame);
+    eventTime.end();
 
     if (state == GameState::game || justLost) {
       simulate();
@@ -731,33 +737,26 @@ void Planets::start() {
     if (state == GameState::game) {
       gameFrame.end();
     }
-
-#ifdef USE_SDL2
-    // SurfaceLocker lock(screen);
-    // for (int y = 0; y < lock.pb.height; y += 2) {
-    //   uint32_t *line = lock.pb.pixels + y * lock.pb.pitch;
-    //   for (int x = 0; x < lock.pb.width; x += 2) {
-    //     line[x] = 0xFF0000FFu ^ x ^ y;
-    //   }
-    // }
-    // lock.unlock();
-#endif
+    flipTime.start();
 
     // Update the screen
     platform.present();
 
-#ifndef BITTBOY
+#ifdef DESKTOP
     // Cap the frame rate to ~100 FPS
     int millisToWait = 10 - frame.elapsedMicros()/1000;
     if (millisToWait > 0) SDL_Delay(millisToWait);
 #endif
     ++frameCounter;
+    flipTime.end();
   }
   std::cout << frameTime << std::endl;
   std::cout << gameFrame << std::endl;
   std::cout << blurTime << std::endl;
   std::cout << renderTime << std::endl;
   std::cout << simTime << std::endl;
+  std::cout << eventTime << std::endl;
+  std::cout << flipTime << std::endl;
 
   std::cout << std::endl;
   std::cout << "sphereCacheMisses: " << SphereCache::numCacheMisses << std::endl;

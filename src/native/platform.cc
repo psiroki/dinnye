@@ -87,7 +87,7 @@ SDL_Surface* Platform::initSDL(int w, int h, int o) {
       SDL_Quit();
       return nullptr;
     }
-    
+
     if (SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE) < 0) {
       std::cerr << "Failed to set blend mode on texture: " << SDL_GetError() << std::endl;
       SDL_FreeSurface(screen);
