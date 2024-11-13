@@ -11,7 +11,7 @@ Platform::Platform():
   screen(nullptr) { }
 
 // Initialize SDL and create a window with the specified dimensions
-SDL_Surface* Platform::initSDL(int w, int h, int o) {
+SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
   width = w;
   height = h;
   orientation = o;
@@ -27,6 +27,7 @@ SDL_Surface* Platform::initSDL(int w, int h, int o) {
   }
 
 #ifdef USE_SDL2
+  softRotate = newSoftRotate && orientation;
   bool fullscreen = (width == 0 || height == 0);
   if (fullscreen) {
     SDL_DisplayMode displayMode;
@@ -60,8 +61,21 @@ SDL_Surface* Platform::initSDL(int w, int h, int o) {
   }
 
   // Optional: get the window surface if needed (e.g., for software rendering)
-  if (!orientation) {
+  if (!orientation || softRotate) {
     screen = SDL_GetWindowSurface(window);
+    if (orientation) {
+      int sw = orientation & 1 ? height : width;
+      int sh = orientation & 1 ? width : height;
+      rotated = SDL_CreateRGBSurface(0, sw, sh, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+      if (!rotated) {
+        std::cerr << "Failed to create screen surface: " << SDL_GetError() << std::endl;
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        TTF_Quit();
+        SDL_Quit();
+        return nullptr;
+      }
+    }
   } else {
     int sw = orientation & 1 ? height : width;
     int sh = orientation & 1 ? width : height;
@@ -108,6 +122,8 @@ SDL_Surface* Platform::initSDL(int w, int h, int o) {
     SDL_Quit();
     return nullptr;
   }
+
+  return softRotate ? rotated : screen;
 #else
   bool fullscreen = width == 0 || height == 0;
   if (fullscreen) {
@@ -123,9 +139,9 @@ SDL_Surface* Platform::initSDL(int w, int h, int o) {
     std::cerr << "Failed to set video mode: " << SDL_GetError() << std::endl;
     return nullptr;
   }
-#endif
 
   return screen;
+#endif
 }
 
 SDL_Surface* Platform::displayFormat(SDL_Surface *src) {
@@ -170,7 +186,20 @@ void Platform::makeOpaque(SDL_Surface *s, bool opaque) {
 
 void Platform::present() {
 #ifdef USE_SDL2
-  if (!orientation) {
+  if (!orientation || softRotate) {
+    if (softRotate) {
+      SurfaceLocker r(rotated);
+      SurfaceLocker s(screen);
+      for (int y = 0; y < r.pb.height; ++y) {
+        uint32_t *line = r.pb.pixels + y * r.pb.pitch;
+        uint32_t *column = s.pb.pixels + (r.pb.height - y - 1);
+        for (int x = 0; x < r.pb.width; ++x) {
+          *column = *line;
+          ++line;
+          column += s.pb.pitch;
+        }
+      }
+    }
     //SDL_RenderPresent(renderer);
     SDL_UpdateWindowSurface(window);
   } else {
