@@ -31,11 +31,11 @@ $(ZIP_PACKAGE): $(ASSETS) $(LORES_ASSETS) $(BUILD_DIR)/planets $(PACKER_DIR)/pla
 	mkdir -p "$(SHORTCUT_DIR_SD)"
 	mkdir -p "$(ICONS_DIR_SD)"
 	@echo Assets: $(ASSETS)
-	cp $(ASSETS) "$(ASSET_DIR_SD)/"
-	cp $(LORES_ASSETS) "$(ASSET_DIR_SD)/"
-	cp "$(BUILD_DIR)/planets" "$(BINARY_DIR_SD)/"
-	cp "$(PACKER_DIR)/planetmerge" "$(SHORTCUT_DIR_SD)/"
-	cp "$(PACKER_DIR)/planetmerge.png" "$(ICONS_DIR_SD)/"
+	cp -u $(ASSETS) "$(ASSET_DIR_SD)/"
+	cp -u $(LORES_ASSETS) "$(ASSET_DIR_SD)/"
+	cp -u "$(BUILD_DIR)/planets" "$(BINARY_DIR_SD)/"
+	cp -u "$(PACKER_DIR)/planetmerge" "$(SHORTCUT_DIR_SD)/"
+	cp -u "$(PACKER_DIR)/planetmerge.png" "$(ICONS_DIR_SD)/"
 	(cd "$(SD_ROOT)"; zip -r $(ZIP_PACKAGE) *)
 
 dumpNames:

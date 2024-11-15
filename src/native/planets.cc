@@ -70,10 +70,11 @@ struct SectionTime {
   Timestamp startTime;
   uint64_t allMicros;
   uint32_t maxMicros;
+  uint32_t minMicros;
   uint32_t count;
   TimeHistogram histogram;
 
-  SectionTime(const char *name = nullptr): name(name), allMicros(0), maxMicros(0), count(0) { }
+  SectionTime(const char *name = nullptr): name(name), allMicros(0), maxMicros(0), minMicros(~0u), count(0) { }
 
   void start() {
     startTime.reset();
@@ -84,6 +85,7 @@ struct SectionTime {
     uint64_t micros = startTime.elapsedMicros();
     allMicros += micros;
     if (micros > maxMicros) maxMicros = micros;
+    if (micros < minMicros) minMicros = micros;
     histogram.add(micros/100);
     return micros;
   }
@@ -93,6 +95,7 @@ struct SectionTime {
       s << "No " << name << " times reported\n";
       return;
     }
+    s << "min(" << name << ") micros: " << minMicros << "\n";
     s << "max(" << name << ") micros: " << maxMicros << "\n";
     s << "avg(" << name << ") micros: " << allMicros / count << "\n";
     printPercentiles(name, 167, histogram.counts, s);
@@ -581,6 +584,7 @@ void Planets::initAudio() {
   std::cerr << "Starting audio" << std::endl;
   SDL_PauseAudio(0);
 
+  std::cerr << "Starting music streamer" << std::endl;
   music = new ThreadedFdaStreamer(mixer, "assets/wiggle-until-you-giggle.fda");
   music->startThread();
 }
@@ -622,13 +626,15 @@ void Planets::start() {
 #elif defined(LOREZ)
   screen = platform.initSDL(320, 240);
 #elif defined(MIYOOA30)
-  screen = platform.initSDL(480, 640, 3);
+  screen = platform.initSDL(0, 0, 3, false);
 #else
-  screen = platform.initSDL(640, 480);
+  screen = platform.initSDL(640, 480, 0, false);
 #endif
   if (!screen) return;
 
   initAudio();
+
+  std::cerr << "Initializing sim..." << std::endl;
 
   running = true;
 
@@ -639,6 +645,8 @@ void Planets::start() {
   sim.init(seed);
   sim.setGravity(Scalar(0.0078125f * 0.5f));
 
+  std::cerr << "Initializing video..." << std::endl;
+
   std::cout << screen->w << "x" << screen->h << std::endl;
   zoom = screen->h / (sim.getWorldHeight() + Scalar(2));
   rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
@@ -648,12 +656,28 @@ void Planets::start() {
   next.zoom = zoom;
   next.reset(sim, seed);
 
+  std::cerr << "Loading state..." << std::endl;
+
   loadState();
+
+  std::cerr << "Loading textures..." << std::endl;
   
   snapshot = platform.displayFormat(screen);
+  if (!snapshot) {
+    std::cerr << "Couldn't allocate snapshot surface" << std::endl;
+    SDL_Quit();
+  }
   platform.makeOpaque(snapshot);
   background = loadImage(screen->w <= 640 ? "assets/background.png" : "assets/hi_background.jpg");
+  if (!background) {
+    std::cerr << "Couldn't load background" << std::endl;
+    SDL_Quit();
+  }
   SDL_Surface *backgroundScreen = platform.displayFormat(screen);
+  if (!backgroundScreen) {
+    std::cerr << "Couldn't allocate memory for background" << std::endl;
+    SDL_Quit();
+  }
   if (background->w < backgroundScreen->w || background->h < backgroundScreen->h)
     SDL_FillRect(backgroundScreen, nullptr, 0);
   SDL_Rect bgPos = makeRect(
@@ -671,6 +695,8 @@ void Planets::start() {
   renderer->renderBackground(background);
 
   Fruit *fruits;
+
+  std::cerr << "Entering main loop..." << std::endl;
 
   while (running) {
     frameTime.start();

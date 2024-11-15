@@ -10,11 +10,11 @@
 
 class Platform {
   SDL_Surface *screen;
+  SDL_Surface *rotated;
   int width, height;
   int orientation;
 #ifdef USE_SDL2
   bool softRotate;
-  SDL_Surface *rotated;
   SDL_Window* window;
   SDL_Renderer* renderer;
   SDL_Texture* texture;        // Texture to display the final surface

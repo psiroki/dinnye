@@ -25,8 +25,8 @@ $(ZIP_PACKAGE): $(ASSETS) $(BUILD_DIR)/planets $(PACKER_DIR)/Planet\ Merge.sh $(
 	mkdir -p "$(SHORTCUT_DIR_SD)"
 	mkdir -p "$(SHORTCUT_DIR_SD)/Imgs"
 	@echo Assets: $(ASSETS)
-	cp $(ASSETS) "$(ASSET_DIR_SD)/"
-	cp "$(BUILD_DIR)/planets" "$(BINARY_DIR_SD)/"
-	cp "$(PACKER_DIR)/Planet Merge.sh" "$(SHORTCUT_DIR_SD)/"
-	cp "$(PACKER_DIR)/Planet Merge.png" "$(SHORTCUT_DIR_SD)/Imgs/"
+	cp -u $(ASSETS) "$(ASSET_DIR_SD)/"
+	cp -u "$(BUILD_DIR)/planets" "$(BINARY_DIR_SD)/"
+	cp -u "$(PACKER_DIR)/Planet Merge.sh" "$(SHORTCUT_DIR_SD)/"
+	cp -u "$(PACKER_DIR)/Planet Merge.png" "$(SHORTCUT_DIR_SD)/Imgs/"
 	(cd "$(SD_ROOT)"; zip -r $(ZIP_PACKAGE) *)

@@ -2,6 +2,14 @@
 
 #include <iostream>
 
+#ifdef USE_SDL2
+namespace {
+  void dumpRendererInfo(const SDL_RendererInfo &info) {
+    std::cout << info.name << " flags: " << info.flags << std::endl;
+  }
+}
+#endif
+
 Platform::Platform():
 #ifdef USE_SDL2
   window(nullptr),
@@ -11,10 +19,10 @@ Platform::Platform():
   screen(nullptr) { }
 
 // Initialize SDL and create a window with the specified dimensions
-SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
+SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr) {
   width = w;
   height = h;
-  orientation = o;
+  orientation = o & 3;
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
     std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
     return nullptr;
@@ -27,7 +35,17 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
   }
 
 #ifdef USE_SDL2
-  softRotate = newSoftRotate && orientation;
+  int numRenderDrivers = SDL_GetNumRenderDrivers();
+  std::cout << "Number of render drivers: " << numRenderDrivers << std::endl;
+  int driverToUse = -1;
+  for (int i = 0; i < numRenderDrivers; ++i) {
+    SDL_RendererInfo info;
+    SDL_GetRenderDriverInfo(i, &info);
+    std::cout << "#" << i << " ";
+    dumpRendererInfo(info);
+    if (driverToUse < 0 && info.flags & SDL_RENDERER_ACCELERATED) driverToUse = i;
+  }
+  softRotate = sr && orientation;
   bool fullscreen = (width == 0 || height == 0);
   if (fullscreen) {
     SDL_DisplayMode displayMode;
@@ -51,7 +69,11 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
   }
 
   // Create a renderer with vsync enabled, compatible with SDL2's double-buffering
-  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  uint32_t flags = driverToUse < 0 ? SDL_RENDERER_SOFTWARE : SDL_RENDERER_ACCELERATED;
+#ifndef MIYOOA30
+  flags |= SDL_RENDERER_PRESENTVSYNC;
+#endif
+  renderer = SDL_CreateRenderer(window, driverToUse, flags);
   if (!renderer) {
       std::cerr << "Failed to create renderer: " << SDL_GetError() << std::endl;
       SDL_DestroyWindow(window);
@@ -59,10 +81,25 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
       SDL_Quit();
       return nullptr;
   }
+  SDL_RendererInfo info;
+  SDL_GetRendererInfo(renderer, &info);
+  std::cout << "Renderer: ";
+  dumpRendererInfo(info);
+  if (!(!orientation || softRotate)) {
+    std::cout << "Will use texture streaming" << std::endl;
+  }
 
   // Optional: get the window surface if needed (e.g., for software rendering)
   if (!orientation || softRotate) {
     screen = SDL_GetWindowSurface(window);
+    if (!screen) {
+      std::cerr << "Failed to create screen surface: " << SDL_GetError() << std::endl;
+      SDL_DestroyRenderer(renderer);
+      SDL_DestroyWindow(window);
+      TTF_Quit();
+      SDL_Quit();
+      return nullptr;
+    }
     if (orientation) {
       int sw = orientation & 1 ? height : width;
       int sh = orientation & 1 ? width : height;
@@ -75,6 +112,7 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
         SDL_Quit();
         return nullptr;
       }
+      makeOpaque(rotated);
     }
   } else {
     int sw = orientation & 1 ? height : width;
@@ -89,6 +127,7 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
       SDL_Quit();
       return nullptr;
     }
+    makeOpaque(screen);
 
     // Create a texture to present the final image on screen
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, sw, sh);
@@ -102,26 +141,10 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
       return nullptr;
     }
 
-    if (SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE) < 0) {
-      std::cerr << "Failed to set blend mode on texture: " << SDL_GetError() << std::endl;
-      SDL_FreeSurface(screen);
-      SDL_DestroyRenderer(renderer);
-      SDL_DestroyWindow(window);
-      TTF_Quit();
-      SDL_Quit();
-      return nullptr;
-    }
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
   }
 
-  if (SDL_SetSurfaceBlendMode(screen, SDL_BLENDMODE_NONE) < 0) {
-    std::cerr << "Failed to set blend mode on surface: " << SDL_GetError() << std::endl;
-    SDL_FreeSurface(screen);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    TTF_Quit();
-    SDL_Quit();
-    return nullptr;
-  }
+  SDL_SetSurfaceBlendMode(screen, SDL_BLENDMODE_NONE);
 
   return softRotate ? rotated : screen;
 #else
@@ -139,6 +162,12 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
     std::cerr << "Failed to set video mode: " << SDL_GetError() << std::endl;
     return nullptr;
   }
+  if (orientation) {
+    int sw = orientation & 1 ? height : width;
+    int sh = orientation & 1 ? width : height;
+    rotated = screen;
+    screen = createSurface(sw, sh);
+  }
 
   return screen;
 #endif
@@ -146,6 +175,21 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool newSoftRotate) {
 
 SDL_Surface* Platform::displayFormat(SDL_Surface *src) {
 #ifdef USE_SDL2
+  if (!src) {
+    std::cerr << "src is null" << std::endl;
+    SDL_Quit();
+  }
+
+  if (!screen) {
+    std::cerr << "screen is null" << std::endl;
+    SDL_Quit();
+  }
+
+  if (!screen->format) {
+    std::cerr << "screen->format is null" << std::endl;
+    SDL_Quit();
+  }
+
   SDL_Surface *result = SDL_CreateRGBSurfaceWithFormat(
       0,                               // Flags (0 for no specific flags)
       src->w, src->h,
@@ -187,33 +231,78 @@ void Platform::makeOpaque(SDL_Surface *s, bool opaque) {
 void Platform::present() {
 #ifdef USE_SDL2
   if (!orientation || softRotate) {
-    if (softRotate) {
+    if (softRotate && (orientation & 1)) {
       SurfaceLocker r(rotated);
       SurfaceLocker s(screen);
+      bool flip = orientation & 2;
+      int increment = flip ? -s.pb.pitch : s.pb.pitch;
+      uint32_t *base = s.pb.pixels + (flip ? (r.pb.width - 1) * s.pb.pitch : 0);
       for (int y = 0; y < r.pb.height; ++y) {
         uint32_t *line = r.pb.pixels + y * r.pb.pitch;
-        uint32_t *column = s.pb.pixels + (r.pb.height - y - 1);
+        uint32_t *column = base + (flip ? y : r.pb.height - y - 1);
         for (int x = 0; x < r.pb.width; ++x) {
           *column = *line;
           ++line;
-          column += s.pb.pitch;
+          column += increment;
         }
       }
     }
     //SDL_RenderPresent(renderer);
     SDL_UpdateWindowSurface(window);
   } else {
-    SDL_UpdateTexture(texture, nullptr, screen->pixels, screen->pitch);
+    uint32_t *pixels = nullptr;
+    int pitch;
+    SurfaceLocker lock(screen);
+    SDL_LockTexture(texture, nullptr, reinterpret_cast<void**>(&pixels), &pitch);
+    pitch >>= 2;
+    for (int y = 0; y < lock.pb.height; ++y) {
+      memcpy(pixels + pitch*y, lock.pb.pixels + y*lock.pb.pitch, lock.pb.width*4);
+    }
+    SDL_UnlockTexture(texture);
+    //SDL_UpdateTexture(texture, nullptr, screen->pixels, screen->pitch);
     SDL_Rect dst {
       .x = (width - screen->w) >> 1,
       .y = (height - screen->h) >> 1,
       .w = screen->w,
       .h = screen->h,
     };
+    SDL_RenderClear(renderer);
     SDL_RenderCopyEx(renderer, texture, nullptr, &dst, orientation * 90.0, nullptr, SDL_FLIP_NONE);
     SDL_RenderPresent(renderer);
   }
 #else
-  SDL_Flip(screen);
+  if (orientation) {
+    SurfaceLocker r(rotated);
+    SurfaceLocker s(screen);
+    if (orientation & 1) {
+      bool flip = orientation & 2;
+      int increment = flip ? -r.pb.pitch : r.pb.pitch;
+      uint32_t *base = r.pb.pixels + (flip ? (s.pb.width - 1) * r.pb.pitch : 0);
+      uint32_t *src = s.pb.pixels;
+      for (int y = 0; y < s.pb.height; ++y) {
+        uint32_t *line = src;
+        uint32_t *column = base + (flip ? y : s.pb.height - y - 1);
+        for (int x = 0; x < s.pb.width; ++x) {
+          *column = *line;
+          ++line;
+          column += increment;
+        }
+        src += s.pb.pitch;
+      }
+    } else {
+      uint32_t *src = s.pb.pixels;
+      uint32_t *dst = r.pb.pixels + (r.pb.height - 1) * r.pb.pitch + r.pb.width;
+      for (int y = 0; y < s.pb.height; ++y) {
+        uint32_t *srcLine = src;
+        uint32_t *dstLine = dst;
+        for (int x = 0; x < s.pb.width; ++x) {
+          *--dstLine = *srcLine++;
+        }
+        src += s.pb.pitch;
+        dst -= r.pb.pitch;
+      }
+    }
+  }
+  SDL_Flip(orientation ? rotated : screen);
 #endif
 }
