@@ -17,6 +17,7 @@
 #include "image.hh"
 #include "audio.hh"
 #include "menu.hh"
+#include "input.hh"
 
 struct TimeHistogram {
   uint32_t counts[256];
@@ -106,10 +107,6 @@ std::ostream& operator <<(std::ostream& s, const SectionTime &t) {
   t.print(s);
   return s;
 }
-
-enum class Control {
-  UNMAPPED, UP, DOWN, LEFT, RIGHT, NORTH, SOUTH, WEST, EAST, R1, L1, R2, L2, START, SELECT, MENU, LAST_ITEM,
-};
 
 const int dropOffset = 4953;
 
@@ -258,6 +255,8 @@ class Planets: private GameSettings {
   SectionTime simTime;
   const char * const configFilePath;
 
+  InputMapping inputMapping;
+
   bool running;
   bool showFps;
 
@@ -340,42 +339,11 @@ GameState Planets::processInput(const Timestamp &frame) {
       running = false;
     }
     if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-      Control c = Control::UNMAPPED;
-      switch (event.key.keysym.sym) {
-        case SDLK_UP:
-          c = Control::UP;
-          break;
-        case SDLK_DOWN:
-          c = Control::DOWN;
-          break;
-        case SDLK_LEFT:
-          c = Control::LEFT;
-          break;
-        case SDLK_RIGHT:
-          c = Control::RIGHT;
-          break;
-        case SDLK_SPACE:
-          c = Control::NORTH;
-          break;
-        case SDLK_LCTRL:
-          c = Control::EAST;
-          break;
-        case SDLK_LALT:
-          c = Control::SOUTH;
-          break;
-        case SDLK_LSHIFT:
-          c = Control::WEST;
-          break;
-        case SDLK_RETURN:
-          c = Control::START;
-          break;
-        case SDLK_ESCAPE:
-          c = Control::SELECT;
-          break;
-        case SDLK_RCTRL:
-          c = Control::MENU;
-          break;
-      }
+#ifdef USE_SDL2
+      Control c = inputMapping.mapKey(static_cast<int32_t>(event.key.keysym.scancode));
+#else
+      Control c = inputMapping.mapKey(static_cast<int32_t>(event.key.keysym.sym));
+#endif
       controls[c] = event.type == SDL_KEYDOWN;
     }
     if (state == GameState::game && event.type == SDL_MOUSEMOTION) {
@@ -637,6 +605,7 @@ void Planets::renderGame(GameState nextState) {
 Platform platform;
 
 void Planets::start() {
+  inputMapping.dumpTable();
 #if defined(BITTBOY)
 #pragma message "BittBoy build"
   screen = platform.initSDL(0, 0);
@@ -809,6 +778,7 @@ void Planets::start() {
       ++timeCount;
       if (timeCount >= 4) {
         uint32_t fps = timeSum ? timeCount*1000000 / timeSum : 0;
+        timeCount = timeSum = 0;
         renderer->setFps(fps);
       }
     }

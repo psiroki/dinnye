@@ -88,6 +88,21 @@ public:
   }
 };
 
+struct KeyHasher {
+  int32_t m, n, o, s;
+
+  inline KeyHasher() {}
+  
+  inline KeyHasher(int32_t m, int32_t n, int32_t o, int32_t s): m(m), n(n), o(o), s(s) {}
+
+  inline uint32_t hash(int32_t val) const {
+    uint32_t hash = val * m;
+    hash += (val * n) >> (s / 2);
+    hash ^= (val * o) >> s;
+    return hash;
+  }
+};
+
 struct BufferView {
   void *buffer;
   uint32_t sizeInBytes;

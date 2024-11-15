@@ -441,7 +441,7 @@ void blur(SDL_Surface *s, int frame) {
   blur(pb, right, down);
 }
 
-FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0), highscoreCache("High score") {
+FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0), highscoreCache("High score"), fps(-1) {
   ShadedSphere::initTables();
 
   numTextures = (sizeof(imageNames) / sizeof(*imageNames)) - 1;
