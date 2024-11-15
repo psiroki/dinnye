@@ -142,6 +142,7 @@ inline int32_t bitExtend(int16_t val) {
 struct NextPlacement {
   Scalar x;  // y is always -1
   Scalar xv;
+  int intendedX;
   Scalar zoom;
   int radIndex;
   int seed;
@@ -173,9 +174,16 @@ struct NextPlacement {
     }
   }
 
+  inline void setIntendedX(int x) {
+    intendedX = x;
+  }
+
   inline void step(FruitSim &sim) {
     x += xv;
-    xv *= 0.95f;
+    if (intendedX) xv += intendedX * Scalar(0.01f);
+    Scalar mul(0.9f);
+    if (intendedX < 0 && xv < Scalar(0) || intendedX > 0 && xv > Scalar(0)) mul = Scalar(0.95f);
+    xv *= mul;
     constrainInside(sim);
   }
 
@@ -251,13 +259,14 @@ class Planets: private GameSettings {
   const char * const configFilePath;
 
   bool running;
+  bool showFps;
 
   static void callAudioCallback(void *userData, uint8_t *stream, int len);
 
   GameState processInput(const Timestamp &frame);
   void initAudio();
   void simulate();
-  void renderGame();
+  void renderGame(GameState nextState);
   void saveState();
   void loadState();
 
@@ -273,6 +282,7 @@ public:
       returnState(GameState::game),
       numHighscores(0),
       outlierIndex(-1),
+      showFps(false),
       frameTime("frame"),
       gameFrame("gameFrame"),
       blurTime("blur"),
@@ -377,6 +387,11 @@ GameState Planets::processInput(const Timestamp &frame) {
     }
   }
 
+  if (controls[Control::L1] && controls.justPressed(Control::R1) ||
+    controls[Control::R1] && controls.justPressed(Control::L1)) {
+    showFps = !showFps;
+  }
+
   if (state == GameState::menu) {
     if (controls.justPressed(Control::UP)) menu->moveVertical(-1);
     if (controls.justPressed(Control::DOWN)) menu->moveVertical(1);
@@ -423,8 +438,11 @@ GameState Planets::processInput(const Timestamp &frame) {
   }
 
   if (state == GameState::game) {
-    if (controls[Control::LEFT]) next.xv -= 0.01f;
-    if (controls[Control::RIGHT]) next.xv += 0.01f;
+    int ix = 0;
+    if (controls[Control::LEFT]) ix = -1;
+    if (controls[Control::RIGHT]) ix = 1;
+    next.setIntendedX(ix);
+
     Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
     for (int i = 0; i < sizeof(drops)/sizeof(*drops); ++i) {
       if (controls.justPressed(drops[i])) {
@@ -604,14 +622,14 @@ void Planets::simulate() {
   if (state == GameState::game) simTime.end();
 }
 
-void Planets::renderGame() {
+void Planets::renderGame(GameState nextState) {
   renderTime.start();
   Timestamp renderStart;
   SDL_BlitSurface(background, nullptr, screen, nullptr);
 
   Fruit *fruits = sim.getFruits();
   int count = sim.getNumFruits();
-  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame, state == GameState::lost);
+  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame, nextState == GameState::lost);
 
   renderTime.end();
 }
@@ -698,23 +716,11 @@ void Planets::start() {
 
   std::cerr << "Entering main loop..." << std::endl;
 
+  uint32_t timeSum = 0;
+  uint32_t timeCount = 0;
   while (running) {
     frameTime.start();
-    bool justLost = false;
-    if (state == GameState::game && simulationFrame) {
-      bool savedLostState = outlierIndex >= 0;
-      outlierIndex = sim.findGroundedOutside(simulationFrame);
-      if (outlierIndex >= 0) {
-        justLost = true;
-        loseAnimationFrame = 0;
-        state = GameState::lost;
-        if (!savedLostState) insertHighscore(sim.getScore());
-      }
-    }
-    if (state == GameState::game) {
-      ++simulationFrame;
-      gameFrame.start();
-    }
+    if (state == GameState::game) gameFrame.start();
 
     Timestamp frame(frameTime.startTime);
 
@@ -722,10 +728,32 @@ void Planets::start() {
     GameState nextState = processInput(frame);
     eventTime.end();
 
-    if (state == GameState::game || justLost) {
+    bool justLost = false;
+    if (state == GameState::game) {
+#ifdef MIYOOA30
+      for (int iter = 0; iter < 3; ++iter) {
+#endif
+      ++simulationFrame;
       simulate();
 
-      renderGame();
+      if (!justLost && state == GameState::game && simulationFrame) {
+        bool savedLostState = outlierIndex >= 0;
+        outlierIndex = sim.findGroundedOutside(simulationFrame);
+        if (outlierIndex >= 0) {
+          justLost = true;
+          loseAnimationFrame = 0;
+          nextState = GameState::lost;
+          if (!savedLostState) insertHighscore(sim.getScore());
+#ifdef MIYOOA30
+          break;
+#endif
+        }
+      }
+#ifdef MIYOOA30
+      }
+#endif
+
+      renderGame(nextState);
     } else {
       SDL_BlitSurface(snapshot, nullptr, screen, nullptr);
       if (state == GameState::menu) {
@@ -775,6 +803,15 @@ void Planets::start() {
 #endif
     ++frameCounter;
     flipTime.end();
+    if (showFps) {
+      uint32_t overallMicros = frameTime.startTime.elapsedMicros();
+      timeSum += overallMicros;
+      ++timeCount;
+      if (timeCount >= 4) {
+        uint32_t fps = timeSum ? timeCount*1000000 / timeSum : 0;
+        renderer->setFps(fps);
+      }
+    }
   }
   std::cout << frameTime << std::endl;
   std::cout << gameFrame << std::endl;

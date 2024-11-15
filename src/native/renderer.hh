@@ -116,9 +116,14 @@ class FruitRenderer {
   ScoreCache scoreCache;
   ScoreCache highscoreCache;
   SDL_Surface *title;
+  int fps;
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
+
+  inline void setFps(int newFps) {
+    fps = newFps;
+  }
 
   inline void setLayout(Scalar newZoom, Scalar newOffsetX, const FruitSim &sim) {
     zoom = newZoom;

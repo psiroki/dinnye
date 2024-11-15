@@ -150,6 +150,35 @@ namespace {
     if (yb < 16) y <<= 16 - yb;
     return y;
   }
+
+  const uint32_t smallDigits[] {
+    0x749a7b6f,
+    0x79a772a7,
+    0x79cf49ed,
+    0x24a77bcf,
+    0x79ef7bef,
+  };
+
+  void writeDigit(uint32_t *target, int pitch, int digit, uint32_t color, uint32_t shadow) {
+    uint32_t bits = smallDigits[digit >> 1];
+    if (digit&1) bits >>= 16;
+    for (int y = 0; y < 5; ++y) {
+      uint32_t *line = target;
+      for (int x = 0; x < 3; ++x) {
+        if (bits&1) {
+          line[0] = color;
+          line[1] = color;
+          line[pitch] = color;
+          line[pitch + 1] = color;
+          // line[2*pitch] = shadow;
+          // line[2*pitch + 1] = shadow;
+        }
+        line += 2;
+        bits >>= 1;
+      }
+      target += 2*pitch;
+    }
+  }
 }
 
 void ShadedSphere::initTables() {
@@ -963,6 +992,18 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
           line[x] = 0xFFE0E0E0u;
         }
       }
+    }
+  }
+
+  if (fps >= 0) {
+    char c[32];
+    snprintf(c, sizeof(c), "%d", fps);
+    c[sizeof(c)-1] = 0;
+    SurfaceLocker lock(target);
+    uint32_t *base = lock.pb.pixels + 2 * (1 + lock.pb.pitch);
+    for (int i = 0; i < sizeof(c) && c[i]; ++i) {
+      uint32_t *p = base + i * 8;
+      writeDigit(p, lock.pb.pitch, (c[i] - '0')%10, 0xFFFFFFFFu, 0xFF000000u);
     }
   }
 
