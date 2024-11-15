@@ -190,11 +190,10 @@ SDL_Surface* Platform::displayFormat(SDL_Surface *src) {
     SDL_Quit();
   }
 
-  SDL_Surface *result = SDL_CreateRGBSurfaceWithFormat(
-      0,                               // Flags (0 for no specific flags)
-      src->w, src->h,
-      screen->format->BitsPerPixel,   // Bit depth
-      screen->format->format          // Pixel format from the screen surface
+  SDL_Surface *result = SDL_ConvertSurfaceFormat(
+      src,
+      SDL_PIXELFORMAT_ARGB8888,
+      0
   );
   SDL_BlitSurface(src, nullptr, result, nullptr);
   return result;

@@ -611,16 +611,16 @@ void FruitRenderer::renderTitle(int taglineSelection, int fade) {
     .x = static_cast<Sint16>(target->w - tagline.w >> 1),
     .y = static_cast<Sint16>(captionTarget.y + caption.h),
   };
-  int bottom = (taglineTarget.y + tagline.h)*5 >> 2;
+  int bottom = (taglineTarget.y + tagline.h)*3 >> 1;
   int increment = 256*256 / bottom;
-  int alpha = 0;
+  int alpha = fade < 64 ? (256 - fade*3)*256 : 64*256;
   SurfaceLocker lock(target);
   uint32_t *p = lock.pb.pixels;
   for (int y = 0; y < bottom; ++y) {
     int realAlpha = alpha >> 8;
     if (realAlpha > 255) break;
     for (int x = 0; x < target->w; ++x) {
-      p[x] = ablend(p[x], realAlpha);
+      p[x] = ablend(p[x], realAlpha) | 0xFF000000u;
     }
     p += lock.pb.pitch;
     alpha += increment;

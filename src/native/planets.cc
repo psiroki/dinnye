@@ -601,7 +601,6 @@ void Planets::renderGame(GameState nextState) {
 Platform platform;
 
 void Planets::start() {
-  inputMapping.dumpTable();
 #if defined(BITTBOY)
 #pragma message "BittBoy build"
   screen = platform.initSDL(0, 0);
@@ -728,6 +727,9 @@ void Planets::start() {
         }
       } else {
         renderer->renderLostScreen(sim.getScore(), highscores[0].score, snapshot, loseAnimationFrame++);
+#ifdef MIYOOA30
+        loseAnimationFrame += 2;
+#endif
       }
     }
 
