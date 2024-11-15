@@ -16,6 +16,7 @@ public:
 
 class Menu {
   Submenu *main;
+  Submenu *credits;
   Submenu *current;
   FruitRenderer &renderer;
   GameSettings &settings;

@@ -31,7 +31,20 @@ namespace {
     M("New Game", Meaning::newGame),
     M("Music", Meaning::music),
     M("Sound", Meaning::sound),
+#ifndef BITTBOY
+    M("Credits", Meaning::credits),
+#endif
     M("Quit", Meaning::quit),
+    EOM,
+  };
+
+  const MenuItem creditsItems[] = {
+    P("Developed by Peter Siroki"),
+    P(""),
+    P("Music:"),
+    P("Wiggle Until You Giggle"),
+    P("By GoldenSoundLabs at Pixabay"),
+    M("OK", Meaning::mainMenu),
     EOM,
   };
 }
@@ -65,11 +78,18 @@ Submenu::Submenu(const MenuItem *items, FruitRenderer &renderer):
   captions = new SDL_Surface*[numMenuItems];
   maxWidth = 0;
   sumHeight = 0;
+  int height = 0;
   for (int i = 0; i < numMenuItems; ++i) {
+    if (!*items[i].caption) {
+      captions[i] = nullptr;
+      sumHeight += height;
+      continue;
+    }
     SDL_Surface *s = renderer.renderText(items[i].caption, 0xFFFFFFu);
     captions[i] = s;
     if (s->w > maxWidth) maxWidth = s->w;
-    sumHeight += s->h;
+    height = s->h;
+    sumHeight += height;
   }
   adjustSelection(0);
 }
@@ -114,11 +134,14 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings, bool resumePos
   int y = startY;
   int top = y;
   int bottom = y;
+  int height = 0;
   for (int i = 0; i < numMenuItems; ++i) {
     if (!resumePossible && items[i].meaning == Meaning::resume) continue;
     SDL_Rect rect = makeRect(x, y);
-    SDL_BlitSurface(captions[i], nullptr, target, &rect);
-    int height = captions[i]->h;
+    if (captions[i]) {
+      SDL_BlitSurface(captions[i], nullptr, target, &rect);
+      height = captions[i]->h;
+    }
     uint32_t meaning = items[i].meaning;
     if (meaning == Meaning::music || meaning == Meaning::sound) {
       bool enabled = meaning == Meaning::music ? settings.isMusicEnabled() : settings.isSoundEnabled();
@@ -131,7 +154,7 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings, bool resumePos
   y = startY;
   for (int i = 0; i < numMenuItems; ++i) {
     if (!resumePossible && items[i].meaning == Meaning::resume) continue;
-    int height = captions[i]->h;
+    if (captions[i]) height = captions[i]->h;
     uint32_t meaning = items[i].meaning;
     if (meaning == Meaning::music || meaning == Meaning::sound) {
       bool enabled = meaning == Meaning::music ? settings.isMusicEnabled() : settings.isSoundEnabled();
@@ -148,12 +171,18 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings, bool resumePos
 
 Menu::Menu(FruitRenderer &renderer, GameSettings &settings): renderer(renderer), settings(settings) {
   main = new Submenu(mainItems, renderer);
+#ifndef BITTBOY
+  credits = new Submenu(creditsItems, renderer);
+#else
+  credits = nullptr;
+#endif
   current = main;
 }
 
 Menu::~Menu() {
   delete main;
-  main = current = nullptr;
+  if (credits) delete credits;
+  credits = main = current = nullptr;
 }
 
 void Menu::reset() {
@@ -184,6 +213,9 @@ Command Menu::execute() {
     case Meaning::sound:
       settings.setSoundEnabled(!settings.isSoundEnabled());
       return Command::nop;
+    case Meaning::credits:
+      current = credits;
+      break;
     case Meaning::quit:
       return Command::quit;
   }

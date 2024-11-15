@@ -387,11 +387,7 @@ GameState Planets::processInput(const Timestamp &frame) {
     }
   }
 
-#ifdef DESKTOP
-  if (controls.justPressed(Control::SELECT)) {
-#else
   if (controls.justPressed(Control::MENU)) {
-#endif
     switch (state) {
       case GameState::game:
       case GameState::lost:
