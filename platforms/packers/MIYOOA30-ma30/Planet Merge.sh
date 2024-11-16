@@ -1,4 +1,4 @@
 #!/bin/sh
 
-cd /mnt/SDCARD/Emu/PORTS/planetmerge
+cd /mnt/SDCARD/Roms/PORTS/planetmerge
 ./planets
