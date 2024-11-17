@@ -18,6 +18,7 @@
 #include "audio.hh"
 #include "menu.hh"
 #include "input.hh"
+#include "miyoo_audio.hh"
 
 struct TimeHistogram {
   uint32_t counts[256];
@@ -211,7 +212,7 @@ enum class GameState { game, lost, menu };
 const uint32_t highscoreCap = 10;
 
 class Planets: private GameSettings {
-  static const int numBlurFrames = 16;
+  static const int numBlurFrames = 32;
   static const int numBlurCallsPerFrame = 2;
 
   GameState state;
@@ -554,6 +555,13 @@ void Planets::initAudio() {
   desiredAudioSpec.userdata = this;
   desiredAudioSpec.callback = callAudioCallback;
   memcpy(&actualAudioSpec, &desiredAudioSpec, sizeof(actualAudioSpec));
+#ifdef MIYOO_AUDIO
+#pragma message "Using Miyoo audio instead of SDL"
+  if (initMiyooAudio(desiredAudioSpec)) {
+    std::cerr << "Failed to set up audio. Running without it." << std::endl;
+    return;
+  }
+#else
   std::cerr << "Opening audio device" << std::endl;
   if (SDL_OpenAudio(&desiredAudioSpec, &actualAudioSpec)) {
     std::cerr << "Failed to set up audio. Running without it." << std::endl;
@@ -565,6 +573,7 @@ void Planets::initAudio() {
   std::cerr << "Samples: " << actualAudioSpec.samples << std::endl;
   std::cerr << "Starting audio" << std::endl;
   SDL_PauseAudio(0);
+#endif
 
   std::cerr << "Starting music streamer" << std::endl;
   music = new ThreadedFdaStreamer(mixer, "assets/wiggle-until-you-giggle.fda");
@@ -609,6 +618,8 @@ void Planets::start() {
   screen = platform.initSDL(320, 240);
 #elif defined(MIYOOA30)
   screen = platform.initSDL(0, 0, 3, false);
+#elif defined(MIYOO)
+  screen = platform.initSDL(0, 0, 2, false);
 #else
   screen = platform.initSDL(640, 480, 0, false);
 #endif
@@ -644,7 +655,7 @@ void Planets::start() {
 
   std::cerr << "Loading textures..." << std::endl;
   
-  snapshot = platform.displayFormat(screen);
+  snapshot = platform.createSurface(screen->w, screen->h);
   if (!snapshot) {
     std::cerr << "Couldn't allocate snapshot surface" << std::endl;
     SDL_Quit();
@@ -655,7 +666,8 @@ void Planets::start() {
     std::cerr << "Couldn't load background" << std::endl;
     SDL_Quit();
   }
-  SDL_Surface *backgroundScreen = platform.displayFormat(screen);
+  platform.makeOpaque(background);
+  SDL_Surface *backgroundScreen = platform.createSurface(screen->w, screen->h);
   if (!backgroundScreen) {
     std::cerr << "Couldn't allocate memory for background" << std::endl;
     SDL_Quit();
@@ -675,6 +687,7 @@ void Planets::start() {
   menu = new Menu(*renderer, *this);
   renderer->setLayout(zoom, offsetX, sim);
   renderer->renderBackground(background);
+  platform.makeOpaque(background);
 
   Fruit *fruits;
 

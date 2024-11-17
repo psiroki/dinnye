@@ -166,7 +166,21 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr) {
     int sw = orientation & 1 ? height : width;
     int sh = orientation & 1 ? width : height;
     rotated = screen;
-    screen = createSurface(sw, sh);
+    screen = SDL_CreateRGBSurface(
+      SDL_SWSURFACE,
+      sw, // Width of the image
+      sh, // Height of the image
+      32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
+      rotated->format->Rmask,
+      rotated->format->Gmask,
+      rotated->format->Bmask,
+      rotated->format->Amask
+      // 0x00ff0000, // Red mask
+      // 0x0000ff00, // Green mask
+      // 0x000000ff, // Blue mask
+      // 0xff000000  // Alpha mask
+  );
+
   }
 
   return screen;
@@ -212,10 +226,14 @@ SDL_Surface* Platform::createSurface(int width, int height) {
     width, // Width of the image
     height, // Height of the image
     32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
-    0x00ff0000, // Red mask
-    0x0000ff00, // Green mask
-    0x000000ff, // Blue mask
+    screen->format->Rmask,
+    screen->format->Gmask,
+    screen->format->Bmask,
     0xff000000  // Alpha mask
+    // 0x00ff0000, // Red mask
+    // 0x0000ff00, // Green mask
+    // 0x000000ff, // Blue mask
+    // 0xff000000  // Alpha mask
   );
 }
 
