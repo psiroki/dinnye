@@ -143,8 +143,9 @@ void Fruit::constrainInside(uint32_t frameIndex) {
     relSum += Point(-r, 0.0f);
     flags |= touched;
   }
-  // there is no top
-  // if (pos.y < r) pos.y = r;
+  // there is no top, but to keep things sane, we don't
+  // let objects past -4096
+  if (pos.y < Scalar(-4096)) pos.y = Scalar(-4096);
   if (pos.y > worldSizeY - r) {
     pos.y = worldSizeY - r;
     relSum += Point(0.0f, r);
