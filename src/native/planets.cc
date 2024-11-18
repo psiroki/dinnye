@@ -582,11 +582,12 @@ void Planets::initAudio() {
 
 void Planets::simulate() {
   simTime.start();
-  if (state == GameState::game) next.step(sim);
+  bool lostAlready = outlierIndex >= 0;
+  if (state == GameState::game && !lostAlready) next.step(sim);
 
   int popCountBefore = sim.getPopCount();
 
-  if (state == GameState::game) sim.simulate(++seed, simulationFrame);
+  if (state == GameState::game && !lostAlready) sim.simulate(++seed, simulationFrame);
 
   if (popCountBefore != sim.getPopCount())
     mixer.playSound(&pop);
@@ -707,6 +708,7 @@ void Planets::start() {
 
     bool justLost = false;
     if (state == GameState::game) {
+      bool savedLostState = outlierIndex >= 0;
 #ifdef MIYOOA30
       for (int iter = 0; iter < 3; ++iter) {
 #endif
@@ -714,8 +716,7 @@ void Planets::start() {
       simulate();
 
       if (!justLost && state == GameState::game && simulationFrame) {
-        bool savedLostState = outlierIndex >= 0;
-        outlierIndex = sim.findGroundedOutside(simulationFrame);
+        if (!savedLostState) outlierIndex = sim.findGroundedOutside(simulationFrame);
         if (outlierIndex >= 0) {
           justLost = true;
           loseAnimationFrame = 0;
