@@ -215,6 +215,14 @@ class Planets: private GameSettings {
   static const int numBlurFrames = 32;
   static const int numBlurCallsPerFrame = 2;
 
+#if defined(MIYOOA30)
+  static const int numSimStepsPerFrame = 3;
+#elif defined(MIYOO)
+  static const int numSimStepsPerFrame = 2;
+#else
+  static const int numSimStepsPerFrame = 1;
+#endif
+
   GameState state;
   GameState returnState;
   FruitSim sim;
@@ -380,6 +388,7 @@ GameState Planets::processInput(const Timestamp &frame) {
         case Command::reset:
           sim.newGame();
           next.reset(sim, frame.getTime().tv_nsec);
+          outlierIndex = -1;
           // since we started a new game, we are returning to the game
           // state explicitly (returnState may be the lost state)
           returnState = nextState = GameState::game;
@@ -709,27 +718,21 @@ void Planets::start() {
     bool justLost = false;
     if (state == GameState::game) {
       bool savedLostState = outlierIndex >= 0;
-#ifdef MIYOOA30
-      for (int iter = 0; iter < 3; ++iter) {
-#endif
-      ++simulationFrame;
-      simulate();
+      for (int iter = 0; iter < numSimStepsPerFrame; ++iter) {
+        ++simulationFrame;
+        simulate();
 
-      if (!justLost && state == GameState::game && simulationFrame) {
-        if (!savedLostState) outlierIndex = sim.findGroundedOutside(simulationFrame);
-        if (outlierIndex >= 0) {
-          justLost = true;
-          loseAnimationFrame = 0;
-          nextState = GameState::lost;
-          if (!savedLostState) insertHighscore(sim.getScore());
-#ifdef MIYOOA30
-          break;
-#endif
+        if (!justLost && state == GameState::game && simulationFrame) {
+          if (!savedLostState) outlierIndex = sim.findGroundedOutside(simulationFrame);
+          if (outlierIndex >= 0) {
+            justLost = true;
+            loseAnimationFrame = 0;
+            nextState = GameState::lost;
+            if (!savedLostState) insertHighscore(sim.getScore());
+            break;
+          }
         }
       }
-#ifdef MIYOOA30
-      }
-#endif
 
       renderGame(nextState);
     } else {
