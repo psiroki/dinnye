@@ -8,6 +8,10 @@
 #include <SDL/SDL_ttf.h>
 #endif
 
+#ifndef USE_SDL2
+#undef USE_GAME_CONTROLLER
+#endif
+
 class Platform {
   SDL_Surface *screen;
   SDL_Surface *rotated;

@@ -24,10 +24,22 @@ class InputMapping {
   static const KeyMapTable* const defaultLayout;
 
   const KeyMapTable *table;
+#ifdef USE_GAME_CONTROLLER
+  Control controllerButtonMapping[static_cast<int32_t>(SDL_CONTROLLER_BUTTON_MAX)];
+  void initControllerMapping();
+#endif
   Control mapRaw(int32_t val) const;
 public:
-  inline InputMapping(): table(defaultLayout) { }
-  inline InputMapping(const KeyMapTable *t): table(t) { }
+  inline InputMapping(): table(defaultLayout) {
+#ifdef USE_GAME_CONTROLLER
+    initControllerMapping();
+#endif
+  }
+  inline InputMapping(const KeyMapTable *t): table(t) {
+#ifdef USE_GAME_CONTROLLER
+    initControllerMapping();
+#endif
+  }
 
   void dumpTable();
 
@@ -46,4 +58,12 @@ public:
   inline Control mapHatDirection(int directionMask) const {
     return mapRaw(directionMask | TYPE_HAT);
   }
+
+#ifdef USE_GAME_CONTROLLER
+  Control mapGameControllerButton(SDL_GameControllerButton button) const;
+  
+  inline Control mapGameControllerButtonIndex(int button) const {
+    return mapGameControllerButton(static_cast<SDL_GameControllerButton>(button));
+  }
+#endif
 };

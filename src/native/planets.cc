@@ -123,9 +123,17 @@ struct ControlState {
     return controlState[static_cast<int>(control)];
   }
 
+  inline bool isDown(Control control) const {
+    return controlState[static_cast<int>(control)];
+  }
+
   inline bool justPressed(Control control) const {
     int index = static_cast<int>(control);
     return controlState[index] && !prevControlState[index];
+  }
+
+  inline bool comboPressed(Control a, Control b) const {
+    return isDown(a) && justPressed(b) || isDown(b) && justPressed(a);
   }
 
   inline void flush() {
@@ -255,6 +263,8 @@ class Planets: private GameSettings {
   uint32_t blurCallsLeft;
   uint32_t frameCounter;
 
+  int32_t lastHatBits;
+
   SectionTime flipTime;
   SectionTime eventTime;
   SectionTime frameTime;
@@ -265,6 +275,10 @@ class Planets: private GameSettings {
   const char * const configFilePath;
 
   InputMapping inputMapping;
+
+#ifdef USE_GAME_CONTROLLER
+  SDL_GameController *controller;
+#endif
 
   bool running;
   bool showFps;
@@ -301,6 +315,10 @@ public:
       simulationFrame(0),
       frameCounter(0),
       blurCallsLeft(0),
+#ifdef USE_GAME_CONTROLLER
+      controller(nullptr),
+#endif
+      lastHatBits(0),
       configFilePath(configFilePath) {
     std::cout << "Config file: " << configFilePath << std::endl;
   }
@@ -347,6 +365,31 @@ GameState Planets::processInput(const Timestamp &frame) {
     if (event.type == SDL_QUIT) {
       running = false;
     }
+#ifdef USE_GAME_CONTROLLER
+    if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
+      Control c = inputMapping.mapGameControllerButtonIndex(event.cbutton.button);
+      controls[c] = event.type == SDL_CONTROLLERBUTTONDOWN;
+    }
+#else
+    if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) {
+      if (event.type == SDL_JOYBUTTONDOWN) std::cout << "Button " << int(event.jbutton.button) << std::endl;
+      Control c = inputMapping.mapButton(event.jbutton.button);
+      controls[c] = event.type == SDL_JOYBUTTONDOWN;
+    }
+    if (event.type == SDL_JOYHATMOTION) {
+      int32_t hatBits = event.jhat.value;
+      std::cout << "Hat " << hatBits << std::endl;
+      for (int i = 0; i < 4; ++i) {
+        int32_t mask = 1 << i;
+        int32_t bit = hatBits & mask;
+        if (bit != (lastHatBits & mask)) {
+          Control c = inputMapping.mapHatDirection(mask);
+          controls[c] = bit;
+        }
+      }
+      lastHatBits = hatBits;
+    }
+#endif
     if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
 #ifdef USE_SDL2
       Control c = inputMapping.mapKey(static_cast<int32_t>(event.key.keysym.scancode));
@@ -364,9 +407,13 @@ GameState Planets::processInput(const Timestamp &frame) {
     }
   }
 
-  if (controls[Control::L1] && controls.justPressed(Control::R1) ||
-    controls[Control::R1] && controls.justPressed(Control::L1)) {
+  if (controls.comboPressed(Control::L1, Control::R1) ||
+      controls.comboPressed(Control::L2, Control::R2)) {
     showFps = !showFps;
+  }
+
+  if (controls.comboPressed(Control::START, Control::SELECT)) {
+    running = false;
   }
 
   if (state == GameState::menu) {
@@ -397,7 +444,7 @@ GameState Planets::processInput(const Timestamp &frame) {
     }
   }
 
-  if (controls.justPressed(Control::MENU)) {
+  if (controls.justPressed(Control::MENU) || controls.justPressed(Control::START)) {
     switch (state) {
       case GameState::game:
       case GameState::lost:
@@ -623,19 +670,33 @@ void Planets::start() {
 #if defined(BITTBOY)
 #pragma message "BittBoy build"
   screen = platform.initSDL(0, 0);
-  SDL_ShowCursor(false);
 #elif defined(LOREZ)
   screen = platform.initSDL(320, 240);
 #elif defined(MIYOOA30)
   screen = platform.initSDL(0, 0, 3, false);
 #elif defined(MIYOO)
   screen = platform.initSDL(0, 0, 2, false);
-#else
+#elif defined(DESKTOP)
   screen = platform.initSDL(640, 480, 0, false);
+#else
+  screen = platform.initSDL(0, 0, 0, false);
+#endif
+
+#ifndef DESKTOP
+  SDL_ShowCursor(false);
 #endif
   if (!screen) return;
 
   initAudio();
+
+#ifdef USE_GAME_CONTROLLER
+  for (int i = 0; i < SDL_NumJoysticks(); i++) {
+    if (SDL_IsGameController(i)) {
+      controller = SDL_GameControllerOpen(i);
+      break;
+    }
+  }
+#endif
 
   std::cerr << "Initializing sim..." << std::endl;
 
@@ -883,6 +944,7 @@ int main(int argc, char **argv) {
   const char *relFile = "/planetmerge/state.bin";
   AutoDeleteArray<char> configFilePath = nullptr;
   AutoDeleteArray<char> customHome = nullptr;
+  const char *configFilePathPtr = nullptr;
   if (!configHome && appData) {
     configHome = appData;
   } else if (!configHome && !appData && home) {
@@ -913,7 +975,9 @@ int main(int argc, char **argv) {
   } else {
     configFilePath = nullptr;
   }
-  Planets planets(configFilePath);
+  configFilePathPtr = configFilePath;
+  if (argc > 1) configFilePathPtr = argv[1];
+  Planets planets(configFilePathPtr);
   planets.start();
   return 0;
 }

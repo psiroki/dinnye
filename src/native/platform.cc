@@ -2,6 +2,10 @@
 
 #include <iostream>
 
+#ifdef DESKTOP
+#define USE_JOYSTICK
+#endif
+
 #ifdef USE_SDL2
 namespace {
   void dumpRendererInfo(const SDL_RendererInfo &info) {
@@ -23,10 +27,22 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr) {
   width = w;
   height = h;
   orientation = o & 3;
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+  Uint32 initFlags = SDL_INIT_VIDEO | SDL_INIT_AUDIO;
+#ifdef USE_JOYSTICK
+  initFlags |= SDL_INIT_JOYSTICK;
+#endif
+#ifdef USE_GAME_CONTROLLER
+  initFlags |= SDL_INIT_GAMECONTROLLER;
+#endif
+  if (SDL_Init(initFlags) < 0) {
     std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
     return nullptr;
   }
+#ifdef USE_JOYSTICK
+  if (SDL_NumJoysticks() > 0) {
+    SDL_JoystickOpen(0);
+  }
+#endif
 
   if (TTF_Init() < 0) {
     std::cerr << "Failed to initialize SDL_ttf: " << TTF_GetError() << std::endl;

@@ -144,8 +144,14 @@ void Fruit::constrainInside(uint32_t frameIndex) {
     flags |= touched;
   }
   // there is no top, but to keep things sane, we don't
-  // let objects past -4096
-  if (pos.y < Scalar(-4096)) pos.y = Scalar(-4096);
+  // let objects past -1024
+  if (pos.y < Scalar(-1024)) {
+    pos.y = Scalar(-1024);
+    // we also trim the velocity if needed: do not go too fast down
+    if (lastPos.y < Scalar(-1024-512)) lastPos.y = Scalar(-1024-512);
+    // break the speed
+    if (lastPos.y > Scalar(-512)) lastPos.y = Scalar(-1024);
+  }
   if (pos.y > worldSizeY - r) {
     pos.y = worldSizeY - r;
     relSum += Point(0.0f, r);
