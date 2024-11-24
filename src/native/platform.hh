@@ -19,13 +19,14 @@ class Platform {
   int orientation;
 #ifdef USE_SDL2
   bool softRotate;
+  bool forceTexture;
   SDL_Window* window;
   SDL_Renderer* renderer;
   SDL_Texture* texture;        // Texture to display the final surface
 #endif
 public:
   Platform();
-  SDL_Surface *initSDL(int width, int height, int orientation = 0, bool softRotate = true);
+  SDL_Surface *initSDL(int width, int height, int orientation = 0, bool softRotate = true, bool forceTexture = false);
   SDL_Surface* displayFormat(SDL_Surface *src);
   SDL_Surface* createSurface(int width, int height);
   void makeOpaque(SDL_Surface *s, bool opaque = true);

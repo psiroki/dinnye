@@ -23,7 +23,7 @@ Platform::Platform():
   screen(nullptr) { }
 
 // Initialize SDL and create a window with the specified dimensions
-SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr) {
+SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr, bool fr) {
   width = w;
   height = h;
   orientation = o & 3;
@@ -62,6 +62,7 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr) {
     if (driverToUse < 0 && info.flags & SDL_RENDERER_ACCELERATED) driverToUse = i;
   }
   softRotate = sr && orientation;
+  forceTexture = fr;
   bool fullscreen = (width == 0 || height == 0);
   if (fullscreen) {
     SDL_DisplayMode displayMode;
@@ -101,12 +102,12 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr) {
   SDL_GetRendererInfo(renderer, &info);
   std::cout << "Renderer: ";
   dumpRendererInfo(info);
-  if (!(!orientation || softRotate)) {
+  if (forceTexture || !(!orientation || softRotate)) {
     std::cout << "Will use texture streaming" << std::endl;
   }
 
   // Optional: get the window surface if needed (e.g., for software rendering)
-  if (!orientation || softRotate) {
+  if (!forceTexture && (!orientation || softRotate)) {
     screen = SDL_GetWindowSurface(window);
     if (!screen) {
       std::cerr << "Failed to create screen surface: " << SDL_GetError() << std::endl;
@@ -263,7 +264,7 @@ void Platform::makeOpaque(SDL_Surface *s, bool opaque) {
 
 void Platform::present() {
 #ifdef USE_SDL2
-  if (!orientation || softRotate) {
+  if (!forceTexture && (!orientation || softRotate)) {
     if (softRotate && (orientation & 1)) {
       SurfaceLocker r(rotated);
       SurfaceLocker s(screen);
@@ -283,16 +284,16 @@ void Platform::present() {
     //SDL_RenderPresent(renderer);
     SDL_UpdateWindowSurface(window);
   } else {
-    uint32_t *pixels = nullptr;
-    int pitch;
-    SurfaceLocker lock(screen);
-    SDL_LockTexture(texture, nullptr, reinterpret_cast<void**>(&pixels), &pitch);
-    pitch >>= 2;
-    for (int y = 0; y < lock.pb.height; ++y) {
-      memcpy(pixels + pitch*y, lock.pb.pixels + y*lock.pb.pitch, lock.pb.width*4);
-    }
-    SDL_UnlockTexture(texture);
-    //SDL_UpdateTexture(texture, nullptr, screen->pixels, screen->pitch);
+    // uint32_t *pixels = nullptr;
+    // int pitch;
+    // SurfaceLocker lock(screen);
+    // SDL_LockTexture(texture, nullptr, reinterpret_cast<void**>(&pixels), &pitch);
+    // pitch >>= 2;
+    // for (int y = 0; y < lock.pb.height; ++y) {
+    //   memcpy(pixels + pitch*y, lock.pb.pixels + y*lock.pb.pitch, lock.pb.width*4);
+    // }
+    // SDL_UnlockTexture(texture);
+    SDL_UpdateTexture(texture, nullptr, screen->pixels, screen->pitch);
     SDL_Rect dst {
       .x = (width - screen->w) >> 1,
       .y = (height - screen->h) >> 1,

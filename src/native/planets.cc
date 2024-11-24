@@ -225,7 +225,7 @@ class Planets: private GameSettings {
 
 #if defined(MIYOOA30)
   static const int numSimStepsPerFrame = 3;
-#elif defined(MIYOO)
+#elif defined(MIYOO) || defined(RG35XX)
   static const int numSimStepsPerFrame = 2;
 #else
   static const int numSimStepsPerFrame = 1;
@@ -679,7 +679,7 @@ void Planets::start() {
 #elif defined(DESKTOP)
   screen = platform.initSDL(640, 480, 0, false);
 #else
-  screen = platform.initSDL(0, 0, 0, false);
+  screen = platform.initSDL(0, 0, 0, false, true);
 #endif
 
 #ifndef DESKTOP
@@ -976,7 +976,11 @@ int main(int argc, char **argv) {
     configFilePath = nullptr;
   }
   configFilePathPtr = configFilePath;
-  if (argc > 1) configFilePathPtr = argv[1];
+  if (argc > 1 && strncmp("--s", argv[1], 5) == 0) {
+    return 0;
+  } else if (argc > 1) {
+    configFilePathPtr = argv[1];
+  }
   Planets planets(configFilePathPtr);
   planets.start();
   return 0;

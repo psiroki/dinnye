@@ -61,7 +61,7 @@ public:
 
 #ifdef USE_GAME_CONTROLLER
   Control mapGameControllerButton(SDL_GameControllerButton button) const;
-  
+
   inline Control mapGameControllerButtonIndex(int button) const {
     return mapGameControllerButton(static_cast<SDL_GameControllerButton>(button));
   }
