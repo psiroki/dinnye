@@ -2,7 +2,7 @@
 
 # platforms.txt should have lines in the following format:
 # MIYOO mm /path/to/dir/containing/miyommini/cross/compile/docker/makefile
-# RG35XX a32 /path/to/dir/containing/armhf/cross/compile/docker/makefile
+# PORTMASTER a32 /path/to/dir/containing/armhf/cross/compile/docker/makefile
 # (so the parent directory of the Makefile, not the path to the Makefile itself)
 
 set -eu

@@ -225,7 +225,7 @@ class Planets: private GameSettings {
 
 #if defined(MIYOOA30)
   static const int numSimStepsPerFrame = 3;
-#elif defined(MIYOO) || defined(RG35XX)
+#elif defined(MIYOO) || defined(PORTMASTER)
   static const int numSimStepsPerFrame = 2;
 #else
   static const int numSimStepsPerFrame = 1;
