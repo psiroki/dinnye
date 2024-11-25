@@ -591,7 +591,7 @@ FruitRenderer::~FruitRenderer() {
 }
 
 SDL_Surface* FruitRenderer::renderText(const char *str, uint32_t color) {
-  SDL_Color col;
+  SDL_Color col { 255, 255, 255, 255 };
   col.r = (color >> 16) & 0xFF;
   col.g = (color >> 8) & 0xFF;
   col.b = color & 0xFF;

@@ -148,7 +148,7 @@ inline int32_t bitExtend(int16_t val) {
 struct NextPlacement {
   Scalar x;  // y is always -1
   Scalar xv;
-  int intendedX;
+  Scalar intendedX;
   Scalar zoom;
   int radIndex;
   int seed;
@@ -180,7 +180,7 @@ struct NextPlacement {
     }
   }
 
-  inline void setIntendedX(int x) {
+  inline void setIntendedX(Scalar x) {
     intendedX = x;
   }
 
@@ -188,7 +188,10 @@ struct NextPlacement {
     x += xv;
     if (intendedX) xv += intendedX * Scalar(0.01f);
     Scalar mul(0.9f);
-    if (intendedX < 0 && xv < Scalar(0) || intendedX > 0 && xv > Scalar(0)) mul = Scalar(0.95f);
+    if (intendedX < Scalar(0) && xv < Scalar(0) ||
+        intendedX > Scalar(0) && xv > Scalar(0)) {
+      mul = Scalar(0.95f);
+    }
     xv *= mul;
     constrainInside(sim);
   }
@@ -250,6 +253,7 @@ class Planets: private GameSettings {
   AutoDelete<Menu> menu;
   NextPlacement next;
   ControlState controls;
+  Scalar joyX;
   Scalar zoom;
   Scalar rightAligned;
   Scalar centered;
@@ -300,6 +304,7 @@ public:
   Planets(const char *configFilePath):
       next { .x = 0.0f, .xv = 0.0f, },
       controls { },
+      joyX(0),
       state(GameState::game),
       returnState(GameState::game),
       numHighscores(0),
@@ -370,7 +375,13 @@ GameState Planets::processInput(const Timestamp &frame) {
       Control c = inputMapping.mapGameControllerButtonIndex(event.cbutton.button);
       controls[c] = event.type == SDL_CONTROLLERBUTTONDOWN;
     }
+    if (event.type == SDL_CONTROLLERAXISMOTION && event.caxis.axis == 0) {
+      joyX = event.caxis.value * Scalar(1.0f / 32767.0f);
+    }
 #else
+    if (event.type == SDL_JOYAXISMOTION && event.jaxis.axis == 0) {
+      joyX = event.jaxis.value * Scalar(1.0f / 32767.0f);
+    }
     if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) {
       if (event.type == SDL_JOYBUTTONDOWN) std::cout << "Button " << int(event.jbutton.button) << std::endl;
       Control c = inputMapping.mapButton(event.jbutton.button);
@@ -459,9 +470,12 @@ GameState Planets::processInput(const Timestamp &frame) {
   }
 
   if (state == GameState::game) {
-    int ix = 0;
-    if (controls[Control::LEFT]) ix = -1;
-    if (controls[Control::RIGHT]) ix = 1;
+    Scalar ix = 0;
+    if (controls[Control::LEFT]) ix += -1;
+    if (controls[Control::RIGHT]) ix += 1;
+    static const Scalar deadzone(0.01f);
+    if (joyX < -deadzone) ix += (joyX + deadzone) * Scalar(1.2f);
+    if (joyX > deadzone) ix += (joyX - deadzone) * Scalar(1.2f);
     next.setIntendedX(ix);
 
     Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
@@ -692,9 +706,17 @@ void Planets::start() {
 #ifdef USE_GAME_CONTROLLER
   for (int i = 0; i < SDL_NumJoysticks(); i++) {
     if (SDL_IsGameController(i)) {
+      std::cout << "Found game controller" << std::endl;
       controller = SDL_GameControllerOpen(i);
       break;
     }
+  }
+#else
+  if (SDL_NumJoysticks() > 0) {
+    std::cout << "Found joystick" << std::endl;
+    SDL_JoystickOpen(0);
+  } else {
+    std::cout << "No joysticks found" << std::endl;
   }
 #endif
 
