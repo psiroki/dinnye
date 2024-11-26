@@ -77,7 +77,7 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr, bool fr) {
     std::cout << "Display mode is " << width << "x" << height << std::endl;
   }
 
-  Uint32 windowFlags = SDL_WINDOW_SHOWN;// | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+  Uint32 windowFlags = SDL_WINDOW_SHOWN | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
   window = SDL_CreateWindow("Planet Merge", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, windowFlags);
   if (!window) {
       std::cerr << "Failed to create window: " << SDL_GetError() << std::endl;
