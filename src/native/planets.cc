@@ -223,9 +223,6 @@ enum class GameState { game, lost, menu };
 const uint32_t highscoreCap = 10;
 
 class Planets: private GameSettings {
-  static const int numBlurFrames = 32;
-  static const int numBlurCallsPerFrame = 2;
-
 #if defined(MIYOOA30)
   static const int numSimStepsPerFrame = 3;
 #elif defined(MIYOO) || defined(PORTMASTER)
@@ -255,8 +252,6 @@ class Planets: private GameSettings {
   ControlState controls;
   Scalar joyX;
   Scalar zoom;
-  Scalar rightAligned;
-  Scalar centered;
   Scalar offsetX;
 
   int outlierIndex;
@@ -264,6 +259,8 @@ class Planets: private GameSettings {
 
   uint32_t seed;
   uint32_t simulationFrame;
+  uint32_t numBlurFrames;
+  uint32_t numBlurCallsPerFrame;
   uint32_t blurCallsLeft;
   uint32_t frameCounter;
 
@@ -320,6 +317,8 @@ public:
       simulationFrame(0),
       frameCounter(0),
       blurCallsLeft(0),
+      numBlurCallsPerFrame(2),
+      numBlurFrames(32),
 #ifdef USE_GAME_CONTROLLER
       controller(nullptr),
 #endif
@@ -455,7 +454,7 @@ GameState Planets::processInput(const Timestamp &frame) {
     }
   }
 
-  if (controls.justPressed(Control::MENU) || controls.justPressed(Control::START)) {
+  if (controls.justPressed(Control::MENU) || (state != GameState::menu && controls.justPressed(Control::START))) {
     switch (state) {
       case GameState::game:
       case GameState::lost:
@@ -735,9 +734,18 @@ void Planets::start() {
 
   std::cout << screen->w << "x" << screen->h << std::endl;
   zoom = screen->h / (sim.getWorldHeight() + Scalar(2));
-  rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
-  centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
-  offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
+  Scalar rightAligned = screen->w * Scalar(0.9875f) - sim.getWorldWidth() * zoom;
+  Scalar centered = (screen->w - sim.getWorldWidth() * zoom) * Scalar(0.5f);
+  if (screen->w < screen->h * 4 / 3) {
+    offsetX = rightAligned;
+  } else {
+    offsetX = rightAligned * Scalar(0.75f) + centered * Scalar(0.25f);
+  }
+
+  if (screen->w > 640) {
+    numBlurFrames *= numBlurCallsPerFrame;
+    numBlurCallsPerFrame = 1;
+  }
 
   next.zoom = zoom;
   next.reset(sim, seed);

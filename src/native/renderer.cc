@@ -515,7 +515,8 @@ FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0)
     }
   }
 
-  fontSize = target->h / 25;
+  int relevantDimension = target->w < (target->h * 4 / 3) ? (target->w * 3 / 4) : target->h;
+  fontSize = relevantDimension / 25;
   SDL_RWops *rwops = createFontOps();
   font = TTF_OpenFontRW(rwops, 1, fontSize);
   scoreCache.setFont(font);
@@ -712,7 +713,8 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
   int step = (availableHeight - 2*radius) / (numRadii - 1);
   int galleryTop = background->h - (background->h >> 6) - availableHeight - step/2 + zoom / 2;
   int galleryBottom = galleryTop + (numRadii - 1) * step + realRadius * 2;
-  int planetLeft = offsetX - (radius * 9 / 2);
+  int marginRatio = min(9, background->w * 10 * 3 / 4 / background->h);
+  int planetLeft = offsetX - (radius * marginRatio / 2);
   int galleryRight = planetLeft + radius * 11 / 4;
   SurfaceLocker b(background);
   PixelBuffer pb(b.pb);
