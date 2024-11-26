@@ -474,8 +474,8 @@ GameState Planets::processInput(const Timestamp &frame) {
     if (controls[Control::LEFT]) ix += -1;
     if (controls[Control::RIGHT]) ix += 1;
     static const Scalar deadzone(0.01f);
-    if (joyX < -deadzone) ix += (joyX + deadzone) * Scalar(1.2f);
-    if (joyX > deadzone) ix += (joyX - deadzone) * Scalar(1.2f);
+    if (joyX < -deadzone) ix += (joyX + deadzone) * (joyX + deadzone) * Scalar(-1.2f);
+    if (joyX > deadzone) ix += (joyX - deadzone) * (joyX - deadzone) * Scalar(1.2f);
     next.setIntendedX(ix);
 
     Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };

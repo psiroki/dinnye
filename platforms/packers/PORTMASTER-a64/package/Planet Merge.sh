@@ -13,45 +13,47 @@ else
 fi
 
 source $controlfolder/control.txt
-source $controlfolder/device_info.txt
 
+# We source custom mod files from the portmaster folder example mod_jelos.txt which containts pipewire fixes
 [ -f "${controlfolder}/mod_${CFW_NAME}.txt" ] && source "${controlfolder}/mod_${CFW_NAME}.txt"
 
+# We pull the controller configs like the correct SDL2 Gamecontrollerdb GUID from the get_controls function from the control.txt file here
 get_controls
 
-GAMEDIR=/$directory/ports/planetmerge
+GAMEDIR=/$directory/ports/planetmerge/
 CONFDIR="$GAMEDIR/conf/"
 
 # Ensure the conf directory exists
 mkdir -p "$GAMEDIR/conf"
 
-# Set the XDG environment variables for config & savefiles
-export XDG_CONFIG_HOME="$CONFDIR"
-export XDG_DATA_HOME="$CONFDIR"
-
+# Switch to the game directory
 cd $GAMEDIR
 
-runtime="frt_3.5.2"
-if [ ! -f "$controlfolder/libs/${runtime}.squashfs" ]; then
-  # Check for runtime if not downloaded via PM
-  if [ ! -f "$controlfolder/harbourmaster" ]; then
-    echo "This port requires the latest PortMaster to run, please go to https://portmaster.games/ for more info." > /dev/tty0
-    sleep 5
-    exit 1
-  fi
+# Log the execution of the script, the script overwrites itself on each launch
+> "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1
 
-  $ESUDO $controlfolder/harbourmaster --quiet --no-check runtime_check "${runtime}.squashfs"
-fi
+# Some ports like to create save files or settings files in the user's home folder or other locations. We map these config folders so we can either preconfigure games and or have the savefiles in one place. I
+# You can either use XDG variables to redirect the Ports to our gamefolder if the port supports it:
 
-export FRT_NO_EXIT_SHORTCUTS=FRT_NO_EXIT_SHORTCUTS
+# Set the XDG environment variables for config & savefiles
+export XDG_DATA_HOME="$CONFDIR"
+export XDG_CONFIG_HOME="$CONFDIR"
 
-$ESUDO chmod 666 /dev/uinput
-
+# Provide appropriate controller configuration if it recognizes SDL controller input
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 
-cd "$GAMEDIR"
+# We launch gptokeyb using this $GPTOKEYB variable as it will take care of sourcing the executable from the central location,
+# assign the appropriate exit hotkey dependent on the device (ex. select + start for most devices and minus + start for the 
+# rgb10) and assign the appropriate method for killing an executable dependent on the OS the port is run from.
+# With -c we assign a custom mapping file else gptokeyb will only run as a tool to kill the process.
+# For $ANALOGSTICKS we have the ability to supply multiple gptk files to support 1 and 2 analogue stick devices in different ways.
+# For a proper documentation how gptokeyb works: [Link](https://github.com/PortsMaster/gptokeyb)
+#$GPTOKEYB "planets.${DEVICE_ARCH}" -c "./planetmerge.gptk.$ANALOGSTICKS" &
 
-export SDL_MOUSEDEV=/dev/null
-export SDL_NOMOUSE=1
+# Do some platform specific stuff right before the port is launched but after GPTOKEYB is run.
+pm_platform_helper "$GAMEDIR/planets.${DEVICE_ARCH}"
 
-./planets
+./planets.${DEVICE_ARCH}
+
+# Cleanup any running gptokeyb instances, and any platform specific stuff.
+pm_finish
