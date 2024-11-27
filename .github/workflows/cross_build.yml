@@ -20,26 +20,26 @@ jobs:
       - name: Check out the armel builder
         uses: actions/checkout@v3
         with:
-          repository: /psiroki/rg35xx-toolchain
+          repository: psiroki/rg35xx-toolchain
           path: ./build/builders/armel
 
       - name: Check out the gpuarmhf builder
         uses: actions/checkout@v3
         with:
-          repository: /psiroki/gpuarmhf
+          repository: psiroki/gpuarmhf
           path: ./build/builders/gpuarmhf
 
       # The Miyoo Mini repo has some Miyoo Mini specific libraries
       - name: Check out the Miyoo Mini builder
         uses: actions/checkout@v3
         with:
-          repository: /psiroki/miyoomini
+          repository: psiroki/miyoomini
           path: ./build/builders/miyoomini
 
       - name: Check out the AArch64 builder
         uses: actions/checkout@v3
         with:
-          repository: /psiroki/x55toolchain
+          repository: psiroki/x55toolchain
           path: ./build/builders/aarch64
 
       # 3. Generate platforms.txt
