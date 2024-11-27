@@ -33,7 +33,7 @@ jobs:
       - name: Check out the Miyoo Mini builder
         uses: actions/checkout@v3
         with:
-          repository: psiroki/miyoomini
+          repository: psiroki/miyoomini-buildroot
           path: ./build/builders/miyoomini
 
       - name: Check out the AArch64 builder

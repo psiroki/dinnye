@@ -64,7 +64,7 @@ Repo locations:
 
 - RG35XX Garlic/Bittboy: https://github.com/psiroki/rg35xx-toolchain.git
 - Miyoo A30: https://github.com/psiroki/gpuarmhf.git
-- Miyoo Mini: https://github.com/psiroki/miyoomini.git
+- Miyoo Mini: https://github.com/psiroki/miyoomini-buildroot.git
 - AArch64: https://github.com/psiroki/x55toolchain.git
 
 Clone the repo in some folder, and you can create a `platforms/platforms.txt` based on this by filling out the path as
