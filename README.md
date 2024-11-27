@@ -62,13 +62,20 @@ The build system uses Docker images for cross compilations set up by custom make
 
 Repo locations:
 
-- Bittboy: https://github.com/psiroki/rg35xx-toolchain.git
+- RG35XX Garlic/Bittboy: https://github.com/psiroki/rg35xx-toolchain.git
+- Miyoo A30: https://github.com/psiroki/gpuarmhf.git
+- Miyoo Mini: https://github.com/psiroki/miyoomini.git
+- AArch64: https://github.com/psiroki/x55toolchain.git
 
 Clone the repo in some folder, and you can create a `platforms/platforms.txt` based on this by filling out the path as
 described with the angled bracket placeholders:
 
 ```
 BITTBOY bb <path to cloned Bittboy toolchain git repo>
+MIYOOA30 ma30 <path to cloned Miyoo A30 git repo>
+MIYOO mm <path to cloned Miyoo Mini git repo>
+RG35XX22 garlic <path to cloned RG35XX Garlic and Bittboy git repo>
+PORTMASTER a64 <path to cloned AArch64 git repo>
 ```
 
 Run `cross_build.sh` which will take care of the cross compilation, it runs through all the platforms specified in `platforms.txt`,

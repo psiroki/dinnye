@@ -1,0 +1,62 @@
+name: Build for all target platforms
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  cross-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the main repository
+      - name: Check out the main repository
+        uses: actions/checkout@v3
+
+      - name: Check out the armel builder
+        uses: actions/checkout@v3
+        with:
+          repository: /psiroki/rg35xx-toolchain
+          path: ./build/builders/armel
+
+      - name: Check out the gpuarmhf builder
+        uses: actions/checkout@v3
+        with:
+          repository: /psiroki/gpuarmhf
+          path: ./build/builders/gpuarmhf
+
+      # The Miyoo Mini repo has some Miyoo Mini specific libraries
+      - name: Check out the Miyoo Mini builder
+        uses: actions/checkout@v3
+        with:
+          repository: /psiroki/miyoomini
+          path: ./build/builders/miyoomini
+
+      - name: Check out the AArch64 builder
+        uses: actions/checkout@v3
+        with:
+          repository: /psiroki/x55toolchain
+          path: ./build/builders/aarch64
+
+      # 3. Generate platforms.txt
+      - name: Generate platforms.txt
+        run: |
+          ./platforms/gen_platforms_spec.sh ./build/builders/armel ./build/builders/gpuarmhf ./build/builders/miyoomini ./build/builders/aarch64 > ./platforms/platforms.txt
+        shell: bash
+
+      # 4. Run cross_build.sh to build all targets
+      - name: Execute cross-build
+        run: |
+          ./platforms/cross_build.sh
+        shell: bash
+
+      # 5. Upload artifacts
+      - name: Upload built artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-platforms
+          path: ./build/platforms/*.zip
