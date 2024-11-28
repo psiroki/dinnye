@@ -1,0 +1,51 @@
+name: Windows build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: mingw64
+        install: >
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-pthreads
+          mingw-w64-x86_64-SDL2
+          mingw-w64-x86_64-SDL2_ttf
+        update: true
+
+    - name: Configure build with CMake
+      run: |
+        mkdir build
+        cd build
+        cmake -G "MinGW Makefiles" -DUSE_SDL2=ON ..
+
+    - name: Build the project
+      run: |
+        cd build
+        make
+
+    - name: Collect required DLLs
+      run: |
+        cp /mingw64/bin/SDL2.dll build/
+        cp /mingw64/bin/SDL2_ttf.dll build/
+        cp /mingw64/bin/libgcc_s_seh-1.dll build/
+        cp /mingw64/bin/libstdc++-6.dll build/
+        cp /mingw64/bin/libwinpthread-1.dll build/
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-build
+        path: |
+          build/*.exe
+          build/*.dll
