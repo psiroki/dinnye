@@ -17,6 +17,15 @@ jobs:
       - name: Check out the main repository
         uses: actions/checkout@v3
 
+      # 2. Set up Docker cache, and check out the builder repositories
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-docker-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
       - name: Check out the armel builder
         uses: actions/checkout@v3
         with:
