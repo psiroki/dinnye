@@ -86,8 +86,15 @@ build, and even package those platforms that have a packer defined. Though there
 From the project root:
 
 ```
-mkdir build
-cd build
+# Build make the executable
+mkdir -p build/platforms/a64
+cd build/platforms/a64
 cmake -DPORTMASTER=ON -DCMAKE_BUILD_TYPE=Release ..
 make
+
+# Create the package
+cd ../../../platforms/packers/PORTMASTER-a64
+make PROJECT_ROOT="../../.." BUILD_DIR="../../../build/platforms/a64"
 ```
+
+If everything runs without an error the package can be found at `build/platforms/planet_merge_portmaster_a64.zip`.
