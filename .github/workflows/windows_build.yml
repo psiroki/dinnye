@@ -26,7 +26,8 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -G "MinGW Makefiles" -DUSE_SDL2=ON ..
+        find /mingw64/share/ -name "SDL2Config.cmake"
+        cmake -G "MinGW Makefiles" -DUSE_SDL2=ON -DCMAKE_PREFIX_PATH="/mingw64/share/cmake" ..
 
     - name: Build the project
       run: |
