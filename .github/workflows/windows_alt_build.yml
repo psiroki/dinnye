@@ -1,0 +1,40 @@
+name: Alternative Windows build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up MinGW
+        uses: ilamir/install-mingw-w64@v2
+        with:
+          arch: x86_64
+          components: toolchain, mingw-w64-x86-64-gcc-g++
+
+      - name: Install SDL2 and SDL2-ttf
+        run: |
+          choco install sdl2 sdl2_ttf
+
+      - name: Copy DLLs to Build Directory
+        run: |
+          cp "$(where SDL2.dll)" build/
+          cp "$(where SDL2_ttf.dll)" build/
+
+      - name: Configure CMake
+        run: cmake -B build -DUSE_SDL2=ON
+
+      - name: Build the Project
+        run: cmake --build build --config Release
+    
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-build
+          path: |
+            build/*.exe
+            build/*.dll
