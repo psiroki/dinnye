@@ -80,3 +80,14 @@ PORTMASTER a64 <path to cloned AArch64 git repo>
 
 Run `cross_build.sh` which will take care of the cross compilation, it runs through all the platforms specified in `platforms.txt`,
 build, and even package those platforms that have a packer defined. Though there's only one platform specified yet: more to come later.
+
+### Making a PortMaster build manually
+
+From the project root:
+
+```
+mkdir build
+cd build
+cmake -DPORTMASTER=ON -DCMAKE_BUILD_TYPE=Release ..
+make
+```
