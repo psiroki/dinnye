@@ -29,7 +29,7 @@ jobs:
         cd build
         find /mingw64/share/ -iname "sdl*.cmake"
         cmake -DUSE_SDL2=ON ..
-        make
+        cmake --build .
 
     - name: Collect required DLLs
       shell: msys2 {0}
