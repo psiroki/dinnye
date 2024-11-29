@@ -40,6 +40,8 @@ jobs:
         cp /ucrt64/bin/libgcc_s_seh-1.dll build/ || true
         cp /ucrt64/bin/libstdc++-6.dll build/ || true
         cp /ucrt64/bin/libwinpthread-1.dll build/ || true
+        mkdir -p build/bin || true
+        cp /ucrt64/bin/*.dll build/bin/ || true
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -48,3 +50,4 @@ jobs:
         path: |
           build/*.exe
           build/*.dll
+          build/bin/*.dll
