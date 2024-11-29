@@ -20,6 +20,8 @@ jobs:
           mingw-w64-ucrt-x86_64-cmake
           mingw-w64-ucrt-x86_64-SDL2
           mingw-w64-ucrt-x86_64-SDL2_ttf
+          msys2/msys2-base-x86_64
+          zip
         update: true
 
     - name: Configure build with CMake and run build
