@@ -52,6 +52,12 @@ jobs:
         cp /ucrt64/bin/libwinpthread-1.dll build/ || true
         cp /ucrt64/bin/zlib1.dll build/ || true
 
+    - name: Copy assets
+      shell: msys2 {0}
+      run: |
+        mkdir -p build/assets
+        cp assets/*.* build/assets/ || true
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
