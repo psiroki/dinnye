@@ -28,7 +28,7 @@ jobs:
         mkdir build
         cd build
         find /mingw64/share/ -iname "sdl*.cmake"
-        cmake -G "MinGW Makefiles" -DUSE_SDL2=ON -DWIN_BUILD=ON ..
+        cmake -DUSE_SDL2=ON ..
         make
 
     - name: Collect required DLLs
