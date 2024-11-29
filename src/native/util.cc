@@ -125,7 +125,7 @@ int createDirectoryForFile(const char *path) {
       *p = '\0'; // Temporarily end the string to create intermediate directories
 
       // Attempt to create the directory
-      #ifdef _WIN32
+      #if defined(_WIN32) && !defined(__MINGW32__)
       if (mkdir(temp) != 0 && errno != EEXIST) {
       #else
       if (mkdir(temp, 0755) != 0 && errno != EEXIST) {
