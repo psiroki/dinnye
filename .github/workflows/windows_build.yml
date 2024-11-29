@@ -27,18 +27,17 @@ jobs:
       run: |
         mkdir build
         cd build
-        find /mingw64/share/ -iname "sdl*.cmake"
         cmake -DUSE_SDL2=ON ..
         cmake --build .
 
     - name: Collect required DLLs
       shell: msys2 {0}
       run: |
-        cp /mingw64/bin/SDL2.dll build/
-        cp /mingw64/bin/SDL2_ttf.dll build/
-        cp /mingw64/bin/libgcc_s_seh-1.dll build/
-        cp /mingw64/bin/libstdc++-6.dll build/
-        cp /mingw64/bin/libwinpthread-1.dll build/
+        cp /ucrt64/bin/SDL2.dll build/
+        cp /ucrt64/bin/SDL2_ttf.dll build/
+        cp /ucrt64/bin/libgcc_s_seh-1.dll build/
+        cp /ucrt64/bin/libstdc++-6.dll build/
+        cp /ucrt64/bin/libwinpthread-1.dll build/
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
