@@ -348,8 +348,13 @@ void Platform::present() {
 
 
 #ifdef _WIN32
+#define VC_EXTRALEAN
 #define WIN32_LEAN_AND_MEAN
 
+// Turn off our own FIXED definition
+#ifdef FIXED
+#undef FIXED
+#endif
 #include <windows.h>
 
 extern int main(int argc, char **argv);
