@@ -20,8 +20,7 @@ jobs:
           mingw-w64-ucrt-x86_64-cmake
           mingw-w64-ucrt-x86_64-SDL2
           mingw-w64-ucrt-x86_64-SDL2_ttf
-          msys2/msys2-base-x86_64
-          zip
+          mingw-w64-7zip
         update: true
 
     - name: Configure build with CMake and run build
@@ -42,7 +41,7 @@ jobs:
         cp /ucrt64/bin/libgcc_s_seh-1.dll build/ || true
         cp /ucrt64/bin/libstdc++-6.dll build/ || true
         cp /ucrt64/bin/libwinpthread-1.dll build/ || true
-        zip build/all.zip /ucrt64/bin/*.dll
+        7z a build/all.zip /ucrt64/bin/*.dll || true
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
