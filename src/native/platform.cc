@@ -345,3 +345,17 @@ void Platform::present() {
   SDL_Flip(orientation ? rotated : screen);
 #endif
 }
+
+
+#ifdef _WIN32
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
+
+#include <windows.h>
+
+extern int main(int argc, char **argv);
+
+int __stdcall WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw) {
+  return main(__argc, __argv);
+}
+#endif
