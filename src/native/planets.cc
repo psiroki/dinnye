@@ -225,7 +225,7 @@ const uint32_t highscoreCap = 10;
 class Planets: private GameSettings {
 #if defined(MIYOOA30)
   static const int numSimStepsPerFrame = 3;
-#elif defined(MIYOO) || defined(PORTMASTER)
+#elif defined(MIYOO) || defined(PORTMASTER) || defined(RG35XX22)
   static const int numSimStepsPerFrame = 2;
 #else
   static const int numSimStepsPerFrame = 1;
@@ -382,13 +382,11 @@ GameState Planets::processInput(const Timestamp &frame) {
       joyX = event.jaxis.value * Scalar(1.0f / 32767.0f);
     }
     if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) {
-      if (event.type == SDL_JOYBUTTONDOWN) std::cout << "Button " << int(event.jbutton.button) << std::endl;
       Control c = inputMapping.mapButton(event.jbutton.button);
       controls[c] = event.type == SDL_JOYBUTTONDOWN;
     }
     if (event.type == SDL_JOYHATMOTION) {
       int32_t hatBits = event.jhat.value;
-      std::cout << "Hat " << hatBits << std::endl;
       for (int i = 0; i < 4; ++i) {
         int32_t mask = 1 << i;
         int32_t bit = hatBits & mask;
@@ -685,12 +683,14 @@ void Planets::start() {
   screen = platform.initSDL(0, 0);
 #elif defined(LOREZ)
   screen = platform.initSDL(320, 240);
+#elif defined(RG35XX22)
+  screen = platform.initSDL(0, 0, 0, false, true);
 #elif defined(MIYOOA30)
   screen = platform.initSDL(0, 0, 3, false);
 #elif defined(MIYOO)
   screen = platform.initSDL(0, 0, 2, false);
 #elif defined(DESKTOP)
-  screen = platform.initSDL(640, 480, 0, false);
+  screen = platform.initSDL(640, 480, 0, false, true);
 #else
   screen = platform.initSDL(0, 0, 0, false, true);
 #endif
@@ -788,6 +788,7 @@ void Planets::start() {
   menu = new Menu(*renderer, *this);
   renderer->setLayout(zoom, offsetX, sim);
   renderer->renderBackground(background);
+  background = platform.displayFormatAndFree(background);
   platform.makeOpaque(background);
 
   Fruit *fruits;

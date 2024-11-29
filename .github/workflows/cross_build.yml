@@ -69,5 +69,5 @@ jobs:
       - name: Upload built artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: built-platforms
+          name: planet-merge-handhelds-${{ github.sha }}
           path: ./build/platforms/*.zip

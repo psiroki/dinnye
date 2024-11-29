@@ -42,6 +42,8 @@ while read -r line && [ -n "$line" ]; do
       make "WORKSPACE_DIR=$PROJECT_ROOT" "DOCKER_CMD=/bin/bash /workspace/platforms/internal_build_helper.sh build/platforms/$SUFFIX $TAG" "INTERACTIVE=0" shell
       if [ -d "$PACKER_SCRIPT_DIR" ]; then
         (cd "$PACKER_SCRIPT_DIR"; make PROJECT_ROOT="$PROJECT_ROOT" BUILD_DIR="$BUILD_DIR")
+      else
+        echo "No packer found for $TAG-$SUFFIX (expected $PACKER_SCRIPT_DIR)"
       fi
     fi
   fi

@@ -28,6 +28,7 @@ public:
   Platform();
   SDL_Surface *initSDL(int width, int height, int orientation = 0, bool softRotate = true, bool forceTexture = false);
   SDL_Surface* displayFormat(SDL_Surface *src);
+  SDL_Surface* displayFormatAndFree(SDL_Surface *src);
   SDL_Surface* createSurface(int width, int height);
   void makeOpaque(SDL_Surface *s, bool opaque = true);
   void present();

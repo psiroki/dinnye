@@ -177,14 +177,14 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr, bool fr) {
     height = videoInfo->current_h;
   }
 
-  screen = SDL_SetVideoMode(width, height, 32, SDL_HWSURFACE |
-      SDL_DOUBLEBUF |
-      (fullscreen ? SDL_FULLSCREEN : 0));
+  Uint32 videoModeFlags = SDL_DOUBLEBUF | SDL_HWSURFACE;
+  if (fullscreen) videoModeFlags |= SDL_FULLSCREEN;
+  screen = SDL_SetVideoMode(width, height, 32, videoModeFlags);
   if (screen == nullptr) {
     std::cerr << "Failed to set video mode: " << SDL_GetError() << std::endl;
     return nullptr;
   }
-  if (orientation) {
+  if (orientation || fr) {
     int sw = orientation & 1 ? height : width;
     int sh = orientation & 1 ? width : height;
     rotated = screen;
@@ -201,12 +201,19 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr, bool fr) {
       // 0x0000ff00, // Green mask
       // 0x000000ff, // Blue mask
       // 0xff000000  // Alpha mask
-  );
-
+    );
+  } else {
+    rotated = nullptr;
   }
 
   return screen;
 #endif
+}
+
+SDL_Surface* Platform::displayFormatAndFree(SDL_Surface *src) {
+  SDL_Surface *newSurface = displayFormat(src);
+  SDL_FreeSurface(src);
+  return newSurface;
 }
 
 SDL_Surface* Platform::displayFormat(SDL_Surface *src) {
@@ -251,7 +258,7 @@ SDL_Surface* Platform::createSurface(int width, int height) {
     screen->format->Rmask,
     screen->format->Gmask,
     screen->format->Bmask,
-    0xff000000  // Alpha mask
+    ~(screen->format->Rmask|screen->format->Gmask|screen->format->Bmask)  // the rest is alpha
     // 0x00ff0000, // Red mask
     // 0x0000ff00, // Green mask
     // 0x000000ff, // Blue mask
@@ -341,8 +348,22 @@ void Platform::present() {
         dst -= r.pb.pitch;
       }
     }
+  } else if (rotated) {
+    SurfaceLocker r(rotated);
+    SurfaceLocker s(screen);
+    uint32_t *src = s.pb.pixels;
+    uint32_t *dst = r.pb.pixels;
+    for (int y = 0; y < s.pb.height; ++y) {
+      uint32_t *srcLine = src;
+      uint32_t *dstLine = dst;
+      for (int x = 0; x < s.pb.width; ++x) {
+        *dstLine++ = *srcLine++;
+      }
+      src += s.pb.pitch;
+      dst += r.pb.pitch;
+    }
   }
-  SDL_Flip(orientation ? rotated : screen);
+  SDL_Flip(rotated ? rotated : screen);
 #endif
 }
 
