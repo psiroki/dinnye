@@ -35,6 +35,8 @@ jobs:
       run: |
         cp /ucrt64/bin/SDL2.dll build/ || true
         cp /ucrt64/bin/SDL2_ttf.dll build/ || true
+        cp /ucrt64/bin/libharfbuzz-0.dll build/ || true
+        cp /ucrt64/bin/libfreetype-6.dll build/ || true
         cp /ucrt64/bin/libgcc_s_seh-1.dll build/ || true
         cp /ucrt64/bin/libstdc++-6.dll build/ || true
         cp /ucrt64/bin/libwinpthread-1.dll build/ || true
