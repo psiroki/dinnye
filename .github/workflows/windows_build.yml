@@ -36,12 +36,21 @@ jobs:
       run: |
         cp /ucrt64/bin/SDL2.dll build/ || true
         cp /ucrt64/bin/SDL2_ttf.dll build/ || true
-        cp /ucrt64/bin/libharfbuzz-0.dll build/ || true
+        cp /ucrt64/bin/libbrotlicommon.dll build/ || true
+        cp /ucrt64/bin/libbrotlidec.dll build/ || true
+        cp /ucrt64/bin/libbz2-1.dll build/ || true
         cp /ucrt64/bin/libfreetype-6.dll build/ || true
         cp /ucrt64/bin/libgcc_s_seh-1.dll build/ || true
+        cp /ucrt64/bin/libglib-2.0-0.dll build/ || true
+        cp /ucrt64/bin/libgraphite2.dll build/ || true
+        cp /ucrt64/bin/libharfbuzz-0.dll build/ || true
+        cp /ucrt64/bin/libiconv-2.dll build/ || true
+        cp /ucrt64/bin/libintl-8.dll build/ || true
+        cp /ucrt64/bin/libpcre2-8-0.dll build/ || true
+        cp /ucrt64/bin/libpng16-16.dll build/ || true
         cp /ucrt64/bin/libstdc++-6.dll build/ || true
         cp /ucrt64/bin/libwinpthread-1.dll build/ || true
-        7z a -ms=on build/all.7z /ucrt64/bin/*.dll || true
+        cp /ucrt64/bin/zlib1.dll build/ || true
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -50,4 +59,3 @@ jobs:
         path: |
           build/*.exe
           build/*.dll
-          build/all.7z
