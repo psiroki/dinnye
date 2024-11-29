@@ -61,7 +61,8 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-build
+        name: planet-merge-windows-${{ github.sha:0:7 }}
         path: |
           build/*.exe
           build/*.dll
+          build/assets/
