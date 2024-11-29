@@ -1015,3 +1015,9 @@ int main(int argc, char **argv) {
   planets.start();
   return 0;
 }
+
+#ifdef _WIN32
+int __stdcall WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw) {
+  return main(__argc, __argv);
+}
+#endif
