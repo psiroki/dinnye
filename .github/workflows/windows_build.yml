@@ -28,7 +28,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DUSE_SDL2=ON ..
+        cmake -DUSE_SDL2=ON -DWIN_BUILD=ON ..
         cmake --build .
 
     - name: Collect required DLLs
