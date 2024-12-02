@@ -129,7 +129,7 @@ void Submenu::hover(int x, int y) {
   int found = -1;
   for (int i = 0; i < numMenuItems; ++i) {
     const RenderedMenuItem &r(rendered[i]);
-    if (r.caption && y >= r.y && y - r.y < r.caption->h && x >= r.x && x - r.y < r.caption->w) {
+    if (r.caption && y >= r.y && y - r.y < r.caption->h && x >= r.x - 20 && x - r.x < maxWidth + 20) {
       found = i;
       break;
     }
