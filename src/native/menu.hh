@@ -26,6 +26,7 @@ public:
   Menu(FruitRenderer &renderer, GameSettings &settings);
   ~Menu();
   void reset();
+  void hover(int x, int y);
   void moveVertical(int delta);
   void moveHorizontal(int delta);
   Command execute();

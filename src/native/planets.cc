@@ -406,9 +406,13 @@ GameState Planets::processInput(const Timestamp &frame) {
 #endif
       controls[c] = event.type == SDL_KEYDOWN;
     }
-    if (state == GameState::game && event.type == SDL_MOUSEMOTION) {
-      next.x = (event.motion.x - offsetX) / zoom;
-      next.constrainInside(sim);
+    if (event.type == SDL_MOUSEMOTION) {
+      if (state == GameState::game) {
+        next.x = (event.motion.x - offsetX) / zoom;
+        next.constrainInside(sim);
+      } else if (state == GameState::menu) {
+        menu->hover(event.motion.x, event.motion.y);
+      }
     }
     if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
       controls[Control::EAST] = !event.button.state;
@@ -618,7 +622,7 @@ void Planets::initAudio() {
   desiredAudioSpec.freq = 44100;
   desiredAudioSpec.format = AUDIO_S16;
   desiredAudioSpec.channels = 2;
-  desiredAudioSpec.samples = 512;
+  desiredAudioSpec.samples = 768;
   desiredAudioSpec.userdata = this;
   desiredAudioSpec.callback = callAudioCallback;
   memcpy(&actualAudioSpec, &desiredAudioSpec, sizeof(actualAudioSpec));

@@ -1,6 +1,7 @@
 #include "menu.hh"
 
 #include <stdint.h>
+#include <iostream>
 
 namespace {
 
@@ -49,6 +50,10 @@ namespace {
   };
 }
 
+struct RenderedMenuItem {
+  SDL_Surface *caption;
+  int x, y;
+};
 
 class Submenu {
   const MenuItem * const items;
@@ -56,7 +61,7 @@ class Submenu {
   int numMenuItems;
   int maxWidth;
   int sumHeight;
-  SDL_Surface **captions;
+  RenderedMenuItem *rendered;
   FruitRenderer &renderer;
   bool resumeWasPossible;
 
@@ -65,6 +70,7 @@ public:
   Submenu(const MenuItem *items, FruitRenderer &renderer);
   ~Submenu();
   void reset();
+  void hover(int x, int y);
   void moveVertical(int delta);
   inline const MenuItem* getSelection() {
     return items + selection;
@@ -73,20 +79,21 @@ public:
 };
 
 Submenu::Submenu(const MenuItem *items, FruitRenderer &renderer):
-    items(items), renderer(renderer), captions(nullptr), selection(0), resumeWasPossible(true) {
+    items(items), renderer(renderer), rendered(nullptr), selection(0), resumeWasPossible(true) {
   for (numMenuItems = 0; items[numMenuItems].caption; ++numMenuItems);
-  captions = new SDL_Surface*[numMenuItems];
+  rendered = new RenderedMenuItem[numMenuItems];
   maxWidth = 0;
   sumHeight = 0;
   int height = 0;
   for (int i = 0; i < numMenuItems; ++i) {
     if (!*items[i].caption) {
-      captions[i] = nullptr;
+      rendered[i].caption = nullptr;
+      rendered[i].x = rendered[i].y = 0;
       sumHeight += height;
       continue;
     }
     SDL_Surface *s = renderer.renderText(items[i].caption, 0xFFFFFFu);
-    captions[i] = s;
+    rendered[i].caption = s;
     if (s->w > maxWidth) maxWidth = s->w;
     height = s->h;
     sumHeight += height;
@@ -96,10 +103,10 @@ Submenu::Submenu(const MenuItem *items, FruitRenderer &renderer):
 
 Submenu::~Submenu() {
   for (int i = 0; i < numMenuItems; ++i) {
-    SDL_FreeSurface(captions[i]);
-    captions[i] = nullptr;
+    SDL_FreeSurface(rendered[i].caption);
+    rendered[i].caption = nullptr;
   }
-  delete[] captions;
+  delete[] rendered;
 }
 
 
@@ -116,6 +123,21 @@ void Submenu::reset() {
   selection = 0;
   resumeWasPossible = true;
   adjustSelection(0);
+}
+
+void Submenu::hover(int x, int y) {
+  int found = -1;
+  for (int i = 0; i < numMenuItems; ++i) {
+    const RenderedMenuItem &r(rendered[i]);
+    if (r.caption && y >= r.y && y - r.y < r.caption->h && x >= r.x && x - r.y < r.caption->w) {
+      found = i;
+      break;
+    }
+  }
+  if (found >= 0) {
+    selection = found;
+    adjustSelection(0, resumeWasPossible);
+  }
 }
 
 void Submenu::moveVertical(int delta) {
@@ -138,9 +160,11 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings, bool resumePos
   for (int i = 0; i < numMenuItems; ++i) {
     if (!resumePossible && items[i].meaning == Meaning::resume) continue;
     SDL_Rect rect = makeRect(x, y);
-    if (captions[i]) {
-      SDL_BlitSurface(captions[i], nullptr, target, &rect);
-      height = captions[i]->h;
+    rendered[i].x = x;
+    rendered[i].y = y;
+    if (rendered[i].caption) {
+      SDL_BlitSurface(rendered[i].caption, nullptr, target, &rect);
+      height = rendered[i].caption->h;
     }
     uint32_t meaning = items[i].meaning;
     if (meaning == Meaning::music || meaning == Meaning::sound) {
@@ -154,7 +178,7 @@ void Submenu::render(SDL_Surface *target, GameSettings &settings, bool resumePos
   y = startY;
   for (int i = 0; i < numMenuItems; ++i) {
     if (!resumePossible && items[i].meaning == Meaning::resume) continue;
-    if (captions[i]) height = captions[i]->h;
+    if (rendered[i].caption) height = rendered[i].caption->h;
     uint32_t meaning = items[i].meaning;
     if (meaning == Meaning::music || meaning == Meaning::sound) {
       bool enabled = meaning == Meaning::music ? settings.isMusicEnabled() : settings.isSoundEnabled();
@@ -188,6 +212,10 @@ Menu::~Menu() {
 void Menu::reset() {
   current = main;
   current->reset();
+}
+
+void Menu::hover(int x, int y) {
+  current->hover(x, y);
 }
 
 void Menu::moveVertical(int delta) {
