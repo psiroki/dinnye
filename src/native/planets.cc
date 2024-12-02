@@ -225,7 +225,7 @@ const uint32_t highscoreCap = 10;
 class Planets: private GameSettings {
 #if defined(MIYOOA30)
   static const int numSimStepsPerFrame = 3;
-#elif defined(MIYOO) || defined(PORTMASTER) || defined(RG35XX22)
+#elif defined(MIYOO) || defined(PORTMASTER) || defined(RG35XX22) || defined(USE_SDL2)
   static const int numSimStepsPerFrame = 2;
 #else
   static const int numSimStepsPerFrame = 1;
@@ -411,7 +411,7 @@ GameState Planets::processInput(const Timestamp &frame) {
       next.constrainInside(sim);
     }
     if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
-      controls[Control::EAST] = event.button.state;
+      controls[Control::EAST] = !event.button.state;
     }
   }
 
@@ -630,16 +630,28 @@ void Planets::initAudio() {
   }
 #else
   std::cerr << "Opening audio device" << std::endl;
-  if (SDL_OpenAudio(&desiredAudioSpec, &actualAudioSpec)) {
-    std::cerr << "Failed to set up audio. Running without it." << std::endl;
+#ifdef USE_SDL2
+  SDL_AudioDeviceID deviceId = SDL_OpenAudioDevice(nullptr, 0, &desiredAudioSpec, &actualAudioSpec, 0);
+  if (!deviceId) {
+    std::cerr << "Failed to open audio device. Running without it. Error: " 
+              << SDL_GetError() << std::endl;
     return;
   }
+  std::cerr << "Device id: " << deviceId << std::endl;
+  SDL_PauseAudioDevice(deviceId, 0);
+#else
+  if (SDL_OpenAudio(&desiredAudioSpec, &actualAudioSpec)) {
+    std::cerr << "Failed to set up audio. Running without it. Erro: "
+              << SDL_GetError() << std::endl;
+    return;
+  }
+  SDL_PauseAudio(0);
+#endif
   std::cerr << "Freq: " << actualAudioSpec.freq << std::endl;
   std::cerr << "Format: " << actualAudioSpec.format << std::endl;
   std::cerr << "Channels: " << static_cast<int>(actualAudioSpec.channels) << std::endl;
   std::cerr << "Samples: " << actualAudioSpec.samples << std::endl;
   std::cerr << "Starting audio" << std::endl;
-  SDL_PauseAudio(0);
 #endif
 
   std::cerr << "Starting music streamer" << std::endl;
