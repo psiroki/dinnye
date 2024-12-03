@@ -250,6 +250,10 @@ class Planets: private GameSettings {
   AutoDelete<Menu> menu;
   NextPlacement next;
   ControlState controls;
+  Scalar menuButtonAlpha;
+  Scalar menuButtonHover;
+  bool menuDown;
+  int showMenuButton;
   Scalar joyX;
   Scalar zoom;
   Scalar offsetX;
@@ -314,6 +318,10 @@ public:
       simTime("sim"),
       flipTime("flip"),
       eventTime("events"),
+      menuButtonAlpha(0),
+      menuButtonHover(0),
+      menuDown(false),
+      showMenuButton(0),
       simulationFrame(0),
       frameCounter(0),
       blurCallsLeft(0),
@@ -407,15 +415,24 @@ GameState Planets::processInput(const Timestamp &frame) {
       controls[c] = event.type == SDL_KEYDOWN;
     }
     if (event.type == SDL_MOUSEMOTION) {
-      if (state == GameState::game) {
-        next.x = (event.motion.x - offsetX) / zoom;
-        next.constrainInside(sim);
-      } else if (state == GameState::menu) {
-        menu->hover(event.motion.x, event.motion.y);
+      switch (state) {
+        case GameState::game:
+          next.x = (event.motion.x - offsetX) / zoom;
+          next.constrainInside(sim);
+        case GameState::lost:
+          showMenuButton = renderer->getMenuButtonPlacement().contains(event.motion.x, event.motion.y) ? 2 : 1;
+          break;
+        case GameState::menu:
+          menu->hover(event.motion.x, event.motion.y);
+          break;
       }
     }
     if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
-      controls[Control::EAST] = !event.button.state;
+      if (event.type == SDL_MOUSEBUTTONDOWN) {
+        menuDown = state != GameState::menu &&
+            renderer->getMenuButtonPlacement().contains(event.motion.x, event.motion.y);
+      }
+      controls[menuDown ? Control::MENU : Control::EAST] = menuDown ? event.button.state : !event.button.state;
     }
   }
 
@@ -904,6 +921,15 @@ void Planets::start() {
         timeCount = timeSum = 0;
         renderer->setFps(fps);
       }
+    } else {
+      renderer->setFps(-1);
+    }
+
+    if (showMenuButton) {
+      menuButtonAlpha = (Scalar(255) + Scalar(31) * menuButtonAlpha) * (Scalar(1) / Scalar(32));
+      menuButtonHover = ((showMenuButton >= 2 ? Scalar(255) : Scalar(0)) + Scalar(7)*menuButtonHover) * (Scalar(1) / Scalar(8));
+      renderer->setMenuButtonAlpha(menuButtonAlpha);
+      renderer->setMenuButtonHover(menuButtonHover);
     }
   }
   std::cout << frameTime << std::endl;

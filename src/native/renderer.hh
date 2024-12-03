@@ -89,12 +89,20 @@ public:
   SDL_Surface* render(int newScore);
 };
 
+struct Placement {
+  int x, y;
+  int w, h;
+
+  bool contains(int xc, int yc) const {
+    return xc >= x && xc < x + w && yc >= y && yc < y + h;
+  }
+};
+
 struct PlanetDefinition {
   char name[16];
   SDL_Surface *nameText;
   // Preview placement
-  int x, y;
-  int w, h;
+  Placement placement;
 };
 
 void blur(SDL_Surface *s, int frame);
@@ -117,12 +125,31 @@ class FruitRenderer {
   ScoreCache highscoreCache;
   SDL_Surface *title;
   int fps;
+  uint32_t menuButtonAlpha;
+  uint32_t menuButtonHover;
+  Placement menuButtonPlacement;
+
+  /// Renders the topmost layer for the game and lost state
+  void renderCommonOverlay(PixelBuffer pb);
+  void layoutCommonOverlay();
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
 
+  inline const Placement& getMenuButtonPlacement() const {
+    return menuButtonPlacement;
+  }
+
   inline void setFps(int newFps) {
     fps = newFps;
+  }
+
+  inline void setMenuButtonAlpha(int alpha) {
+    menuButtonAlpha = alpha < 0 ? 0 : alpha > 255 ? 255 : alpha;
+  }
+
+  inline void setMenuButtonHover(int alpha) {
+    menuButtonHover = alpha < 0 ? 0 : alpha > 255 ? 255 : alpha;
   }
 
   inline void setLayout(Scalar newZoom, Scalar newOffsetX, const FruitSim &sim) {
@@ -130,6 +157,7 @@ public:
     offsetX = newOffsetX;
     sizeX = sim.getWorldWidth();
     sizeY = sim.getWorldHeight();
+    layoutCommonOverlay();
   }
   SDL_Surface* renderText(const char *str, uint32_t color);
   void renderTitle(int taglineSelection, int fade);

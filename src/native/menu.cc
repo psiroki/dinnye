@@ -1,7 +1,6 @@
 #include "menu.hh"
 
 #include <stdint.h>
-#include <iostream>
 
 namespace {
 

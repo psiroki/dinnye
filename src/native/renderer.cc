@@ -441,6 +441,42 @@ void blur(SDL_Surface *s, int frame) {
   blur(pb, right, down);
 }
 
+void FruitRenderer::renderCommonOverlay(PixelBuffer pb) {
+  if (menuButtonAlpha) {
+    uint32_t targetAlpha = (menuButtonAlpha + 3 * menuButtonHover) >> 2;
+    uint32_t white = targetAlpha | targetAlpha << 8 | targetAlpha << 16 | targetAlpha << 24;
+    Scalar base = zoom;
+    int left = menuButtonPlacement.x;
+    int top = menuButtonPlacement.y;
+    int layerHeight = menuButtonPlacement.h / 6;
+    int layerWidth = menuButtonPlacement.w;
+    for (int i = 0; i < 6; ++i) {
+      int y = layerHeight * i;
+      int h  = !(i & 1) ? layerHeight : layerHeight >> 1;
+      uint32_t a = !(i & 1) ? targetAlpha : targetAlpha >> 2;
+      uint32_t c = !(i & 1) ? white : a << 24;
+      for (int j = layerHeight - h; j < layerHeight; ++j) {
+        uint32_t *pixel = pb.pixels + pb.pitch * (top + y + layerHeight - j) + left;
+        for (int j = 0; j < layerWidth; ++j) {
+          pixel[j] = ablend(pixel[j], 255-a) + c;
+        }
+      }
+    }
+  }
+}
+
+void FruitRenderer::layoutCommonOverlay() {
+  Scalar base = zoom;
+  int marginX = base * (Scalar(2) / Scalar(5));
+  int marginY = base * (Scalar(2) / Scalar(5));
+  int layerHeight = max(Scalar(1), base * (Scalar(1) / Scalar(5)));
+  int layerWidth = base;
+  menuButtonPlacement.w = layerWidth;
+  menuButtonPlacement.h = layerHeight * 6;
+  menuButtonPlacement.x = marginX;
+  menuButtonPlacement.y = target->h - marginY - menuButtonPlacement.h;
+}
+
 FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0), highscoreCache("High score"), fps(-1) {
   ShadedSphere::initTables();
 
@@ -650,7 +686,7 @@ void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *back
     int hsw = highscoreText ? highscoreText->w : 0;
     int hsh = highscoreText ? highscoreText->h : 0;
     int x1 = static_cast<int>(offsetX-scoreText->w) >> 1;
-    int y1 = (planetDefs[0].y * 7 / 8 - scoreText->h) >> 1;
+    int y1 = (planetDefs[0].placement.y * 7 / 8 - scoreText->h) >> 1;
     int x2 = target->w - scoreText->w >> 1;
     int y2 = (target->h - scoreText->h - hsh)  / 3;
     int progress = animationFrame;
@@ -684,6 +720,8 @@ void FruitRenderer::renderLostScreen(int score, int highscore, SDL_Surface *back
     SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
     if (highscoreText) SDL_BlitSurface(highscoreText, nullptr, target, &highscorePos);
   }
+  SurfaceLocker locker(target);
+  renderCommonOverlay(locker.pb);
 }
 
 void FruitRenderer::renderMenuScores(int score, int highscore) {
@@ -752,10 +790,11 @@ void FruitRenderer::renderBackground(SDL_Surface *background) {
     SDL_BlitSurface(s, nullptr, background, &dst);
 
     PlanetDefinition &def(planetDefs[i]);
-    def.x = planetLeft;
-    def.y = y;
-    def.w = s->w;
-    def.h = s->h;
+    Placement &plc(def.placement);
+    plc.x = planetLeft;
+    plc.y = y;
+    plc.w = s->w;
+    plc.h = s->h;
 
     SDL_Surface *text = def.nameText;
     if (text) {
@@ -887,14 +926,14 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
     if (scoreText) {
       SDL_Rect scorePos {
         .x = static_cast<Sint16>(static_cast<int>(offsetX-scoreText->w) >> 1),
-        .y = static_cast<Sint16>((planetDefs[0].y * 7 / 8 - scoreText->h) >> 1),
+        .y = static_cast<Sint16>((planetDefs[0].placement.y * 7 / 8 - scoreText->h) >> 1),
       };
       SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
     }
   }
   // Render selection
   if (selection >= 0 && selection < numRadii) {
-    PlanetDefinition &def(planetDefs[selection]);
+    Placement &def(planetDefs[selection].placement);
     SDL_Rect rect {
       .x = static_cast<Sint16>(def.x + def.w + 2),
       .y = static_cast<Sint16>(def.y + def.h / 8),
@@ -978,6 +1017,7 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
 #endif
 
   if (numAbove) {
+    // Draw arrows (triangles) for objects above the screen
     SurfaceLocker lock(target);
     PixelBuffer pb(lock.pb);
     for (int i = 0; i < numAbove; ++i) {
@@ -996,6 +1036,10 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       }
     }
   }
+
+  SurfaceLocker locker(target);
+  renderCommonOverlay(locker.pb);
+  locker.unlock();
 
   if (fps >= 0) {
     char c[32];
