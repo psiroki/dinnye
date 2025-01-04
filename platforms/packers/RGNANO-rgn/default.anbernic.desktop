@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Planet Merge
+Exec=planets
+Icon=planetmerge
+Terminal=false
+Type=Application
+StartupNotify=true
+Categories=games;

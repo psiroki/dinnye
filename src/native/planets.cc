@@ -639,7 +639,11 @@ void Planets::initAudio() {
   desiredAudioSpec.freq = 44100;
   desiredAudioSpec.format = AUDIO_S16;
   desiredAudioSpec.channels = 2;
+#if defined(RGNANO)
+  desiredAudioSpec.samples = 512;
+#else
   desiredAudioSpec.samples = 768;
+#endif
   desiredAudioSpec.userdata = this;
   desiredAudioSpec.callback = callAudioCallback;
   memcpy(&actualAudioSpec, &desiredAudioSpec, sizeof(actualAudioSpec));
@@ -662,7 +666,7 @@ void Planets::initAudio() {
   SDL_PauseAudioDevice(deviceId, 0);
 #else
   if (SDL_OpenAudio(&desiredAudioSpec, &actualAudioSpec)) {
-    std::cerr << "Failed to set up audio. Running without it. Erro: "
+    std::cerr << "Failed to set up audio. Running without it. Error: "
               << SDL_GetError() << std::endl;
     return;
   }
@@ -711,10 +715,10 @@ void Planets::renderGame(GameState nextState) {
 Platform platform;
 
 void Planets::start() {
-#if defined(BITTBOY)
-#pragma message "BittBoy build"
+#if defined(BITTBOY) || defined(RGNANO)
+#pragma message "BittBoy/RG Nano build"
   screen = platform.initSDL(0, 0);
-#elif defined(LOREZ)
+#elif defined(LOREZ) && defined(DESKTOP)
   screen = platform.initSDL(320, 240);
 #elif defined(RG35XX22)
   screen = platform.initSDL(0, 0, 0, false, true);
@@ -905,7 +909,7 @@ void Planets::start() {
     // Update the screen
     platform.present();
 
-#ifdef DESKTOP
+#if defined(DESKTOP) || defined(RGNANO)
     // Cap the frame rate to ~100 FPS
     int millisToWait = 10 - frame.elapsedMicros()/1000;
     if (millisToWait > 0) SDL_Delay(millisToWait);

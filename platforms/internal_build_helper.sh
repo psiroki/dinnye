@@ -17,4 +17,4 @@ PROJECT_ROOT="$(dirname "$0")/.."
 cd $PROJECT_ROOT/$1
 
 cmake $PROJECT_ROOT "-D$2=ON" -DCMAKE_BUILD_TYPE=Release
-make
+make -j 4

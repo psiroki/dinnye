@@ -61,7 +61,7 @@ uint64_t Timestamp::microsDiff(const timespec &then, const timespec &now) {
     --secDiff;  // secDiff becomes 0
     return secDiff * static_cast<uint64_t>(1000000) + (1000000000L - then.tv_nsec + now.tv_nsec) / 1000;
   } else {
-    return secDiff + (now.tv_nsec - then.tv_nsec) / 1000;
+    return secDiff * 1000000 + (now.tv_nsec - then.tv_nsec) / 1000;
   }
 }
 
