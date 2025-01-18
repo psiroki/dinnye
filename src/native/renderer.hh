@@ -45,7 +45,7 @@ public:
   static int numCacheAngleMisses;
   static int numCacheReassignMisses;
 
-  inline SphereCache(): s(nullptr), cache(nullptr), radius(0), angle(0), dirty(false) { }
+  inline SphereCache(): s(nullptr), cache(nullptr), radius(0), angle(0), dirty(false), outlier(false) { }
 
   void release();
 
@@ -165,5 +165,5 @@ public:
   void renderMenuScores(int score, int highscore);
   void renderBackground(SDL_Surface *background);
   void renderSelection(PixelBuffer pb, int left, int top, int right, int bottom, int shift, bool hollow = false);
-  void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex, bool skipScore = false);
+  void renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex, Scalar frameFraction, bool skipScore);
 };

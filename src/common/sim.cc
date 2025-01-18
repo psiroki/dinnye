@@ -19,7 +19,8 @@ namespace {
       y >>= bits - newBits;
     }
     y += (1 << newBits);
-    y -= 0x4dbfab13 >> (31-newBits);
+    uint32_t sub = 0x4dbfab13 >> (31-newBits);
+    if (y >= sub) y -= sub;
     Fixed result = Fixed::fromRaw(y);
     return result * (3 - f*result*result) >> 1;
   }

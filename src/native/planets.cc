@@ -279,6 +279,8 @@ class Planets: private GameSettings {
   SectionTime simTime;
   const char * const configFilePath;
 
+  bool dropPending;
+
   InputMapping inputMapping;
 
 #ifdef USE_GAME_CONTROLLER
@@ -293,7 +295,7 @@ class Planets: private GameSettings {
   GameState processInput(const Timestamp &frame);
   void initAudio();
   void simulate();
-  void renderGame(GameState nextState);
+  void renderGame(GameState nextState, Scalar frameFraction);
   void saveState();
   void loadState();
 
@@ -327,6 +329,7 @@ public:
       blurCallsLeft(0),
       numBlurCallsPerFrame(2),
       numBlurFrames(32),
+      dropPending(false),
 #ifdef USE_GAME_CONTROLLER
       controller(nullptr),
 #endif
@@ -499,9 +502,7 @@ GameState Planets::processInput(const Timestamp &frame) {
     Control drops[] { Control::NORTH, Control::EAST, Control::SOUTH, Control::WEST };
     for (int i = 0; i < sizeof(drops)/sizeof(*drops); ++i) {
       if (controls.justPressed(drops[i])) {
-        if (next.place(sim, frame.getTime().tv_nsec)) {
-          mixer.playSound(&drop);
-        }
+        dropPending = true;
         break;
       }
     }
@@ -700,14 +701,14 @@ void Planets::simulate() {
   if (state == GameState::game) simTime.end();
 }
 
-void Planets::renderGame(GameState nextState) {
+void Planets::renderGame(GameState nextState, Scalar frameFraction) {
   renderTime.start();
   Timestamp renderStart;
   SDL_BlitSurface(background, nullptr, screen, nullptr);
 
   Fruit *fruits = sim.getFruits();
   int count = sim.getNumFruits();
-  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame, nextState == GameState::lost);
+  renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame, frameFraction, nextState == GameState::lost);
 
   renderTime.end();
 }
@@ -834,7 +835,9 @@ void Planets::start() {
 
   uint32_t timeSum = 0;
   uint32_t timeCount = 0;
+  int lastFrameMicros = 10000;
   while (running) {
+    Timestamp wholeFrame;
     frameTime.start();
     if (state == GameState::game) gameFrame.start();
 
@@ -845,9 +848,18 @@ void Planets::start() {
     eventTime.end();
 
     bool justLost = false;
+    int lastWholeFrames = lastFrameMicros / 10000;
+    Scalar frameFraction = Scalar(lastFrameMicros % 10000) / 10000;
+    lastFrameMicros -= lastWholeFrames * 10000;
     if (state == GameState::game) {
       bool savedLostState = outlierIndex >= 0;
-      for (int iter = 0; iter < numSimStepsPerFrame; ++iter) {
+      for (int iter = 0; iter < lastWholeFrames; ++iter) {
+        if (dropPending) {
+          if (next.place(sim, frame.getTime().tv_nsec)) {
+            mixer.playSound(&drop);
+          }
+          dropPending = false;
+        }
         ++simulationFrame;
         simulate();
 
@@ -863,7 +875,7 @@ void Planets::start() {
         }
       }
 
-      renderGame(nextState);
+      renderGame(nextState, frameFraction);
     } else {
       SDL_BlitSurface(snapshot, nullptr, screen, nullptr);
       if (state == GameState::menu) {
@@ -909,7 +921,9 @@ void Planets::start() {
     // Update the screen
     platform.present();
 
-#if defined(DESKTOP) || defined(RGNANO)
+#if defined(DESKTOP)
+#endif
+#if defined(RGNANO)
     // Cap the frame rate to ~100 FPS
     int millisToWait = 10 - frame.elapsedMicros()/1000;
     if (millisToWait > 0) SDL_Delay(millisToWait);
@@ -935,6 +949,7 @@ void Planets::start() {
       renderer->setMenuButtonAlpha(menuButtonAlpha);
       renderer->setMenuButtonHover(menuButtonHover);
     }
+    lastFrameMicros += wholeFrame.elapsedMicros();
   }
   std::cout << frameTime << std::endl;
   std::cout << gameFrame << std::endl;

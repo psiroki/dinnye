@@ -4,6 +4,7 @@
 
 #ifdef DESKTOP
 #define USE_JOYSTICK
+#define NO_VSYNC
 #endif
 
 #ifdef USE_SDL2
@@ -167,6 +168,9 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr, bool fr) {
   }
 
   SDL_SetSurfaceBlendMode(screen, SDL_BLENDMODE_NONE);
+#ifdef NO_VSYNC
+  SDL_GL_SetSwapInterval(0);
+#endif
 
   return softRotate ? rotated : screen;
 #else

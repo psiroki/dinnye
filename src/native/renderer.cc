@@ -477,7 +477,7 @@ void FruitRenderer::layoutCommonOverlay() {
   menuButtonPlacement.y = target->h - marginY - menuButtonPlacement.h;
 }
 
-FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0), highscoreCache("High score"), fps(-1) {
+FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0), highscoreCache("High score"), fps(-1), menuButtonAlpha(0), menuButtonHover(0) {
   ShadedSphere::initTables();
 
   numTextures = (sizeof(imageNames) / sizeof(*imageNames)) - 1;
@@ -918,8 +918,9 @@ void FruitRenderer::renderSelection(PixelBuffer pb, int left, int top, int right
   }
 }
 
-void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex, bool skipScore) {
+void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex, Scalar frameFraction, bool skipScore) {
   Fruit *fruits = sim.getFruits();
+  Scalar remainingFraction = Scalar(1) - frameFraction;
   if (!skipScore) {
     int score = sim.getScore();
     SDL_Surface *scoreText = scoreCache.render(score);
@@ -958,8 +959,9 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
   if (sim.getNumFruits() < count) {
     SurfaceLocker lock(target);
     const Fruit &f(fruits[count - 1]);
-    int x = f.pos.x * zoom + offsetX;
-    int startY = f.pos.y * zoom + top;
+    Point interpolatedPos = f.pos + (f.lastPos - f.pos) * remainingFraction;
+    int x = interpolatedPos.x * zoom + offsetX;
+    int startY = interpolatedPos.y * zoom + top;
     uint32_t *p = lock.pb.pixels + x + startY * lock.pb.pitch;
 
     int alpha = 0x40;

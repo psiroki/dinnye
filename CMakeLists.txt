@@ -29,7 +29,7 @@ if(BITTBOY OR RGNANO)
   set(FIXED_DEFAULT ON)
 else()
   set(LOREZ_DEFAULT OFF)
-  set(FIXED_DEFAULT OFF)
+  set(FIXED_DEFAULT ON)
 endif()
 
 option(FIXED "Use fixed point math" ${FIXED_DEFAULT})
