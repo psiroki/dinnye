@@ -15,11 +15,25 @@ namespace {
 }
 #endif
 
+void SoftSurface::free() {
+  if (pixels) {
+    delete[] pixels;
+    pixels = nullptr;
+  }
+  if (surface) {
+    SDL_FreeSurface(surface);
+    surface = nullptr;
+  }
+}
+
 Platform::Platform():
 #ifdef USE_SDL2
   window(nullptr),
   renderer(nullptr),
   texture(nullptr),
+#else
+  softPixels(nullptr),
+  useSoftBackbuffer(false),
 #endif
   screen(nullptr) { }
 
@@ -181,7 +195,12 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr, bool fr) {
     height = videoInfo->current_h;
   }
 
-  Uint32 videoModeFlags = SDL_DOUBLEBUF | SDL_HWSURFACE;
+  Uint32 videoModeFlags = SDL_DOUBLEBUF;
+#ifdef USE_SW_SURFACE
+  videoModeFlags |= SDL_SWSURFACE;
+#else
+  videoModeFlags |= SDL_HWSURFACE;
+#endif
   if (fullscreen) videoModeFlags |= SDL_FULLSCREEN;
   screen = SDL_SetVideoMode(width, height, 32, videoModeFlags);
   if (screen == nullptr) {
@@ -192,20 +211,31 @@ SDL_Surface* Platform::initSDL(int w, int h, int o, bool sr, bool fr) {
     int sw = orientation & 1 ? height : width;
     int sh = orientation & 1 ? width : height;
     rotated = screen;
-    screen = SDL_CreateRGBSurface(
-      SDL_SWSURFACE,
-      sw, // Width of the image
-      sh, // Height of the image
-      32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
-      rotated->format->Rmask,
-      rotated->format->Gmask,
-      rotated->format->Bmask,
-      rotated->format->Amask
-      // 0x00ff0000, // Red mask
-      // 0x0000ff00, // Green mask
-      // 0x000000ff, // Blue mask
-      // 0xff000000  // Alpha mask
-    );
+    if (useSoftBackbuffer) {
+      softPixels = new uint32_t[sw * sh];
+      screen = SDL_CreateRGBSurfaceFrom(softPixels, sw, // Width of the image
+        sh, // Height of the image
+        32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
+        sw * 4,
+        rotated->format->Rmask,
+        rotated->format->Gmask,
+        rotated->format->Bmask,
+        rotated->format->Amask
+      );
+      std::cout << "Screen is a soft surface: " << screen->pixels << softPixels << std::endl;
+    } else {
+      screen = SDL_CreateRGBSurface(
+        SDL_SWSURFACE,
+        sw, // Width of the image
+        sh, // Height of the image
+        32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
+        rotated->format->Rmask,
+        rotated->format->Gmask,
+        rotated->format->Bmask,
+        rotated->format->Amask
+      );
+      std::cout << "Screen is SWSURFACE: " << (screen->flags & SDL_SWSURFACE) << std::endl;
+    }
   } else {
     rotated = nullptr;
   }
@@ -256,18 +286,34 @@ SDL_Surface* Platform::createSurface(int width, int height) {
 #else
     SDL_SWSURFACE,
 #endif
-    width, // Width of the image
-    height, // Height of the image
-    32, // Bits per pixel (8 bits per channel * 4 channels = 32 bits)
+    width,
+    height,
+    32, // 32 bits
     screen->format->Rmask,
     screen->format->Gmask,
     screen->format->Bmask,
     ~(screen->format->Rmask|screen->format->Gmask|screen->format->Bmask)  // the rest is alpha
-    // 0x00ff0000, // Red mask
-    // 0x0000ff00, // Green mask
-    // 0x000000ff, // Blue mask
-    // 0xff000000  // Alpha mask
   );
+}
+
+SoftSurface* Platform::createSoftSurface(int width, int height) {
+  SoftSurface *surface = new SoftSurface(width, height);
+  surface->surface = SDL_CreateRGBSurfaceFrom(
+    surface->pixels,
+    surface->width,
+    surface->height,
+    32, // 32 bits
+    surface->pitch * 4,
+    screen->format->Rmask,
+    screen->format->Gmask,
+    screen->format->Bmask,
+    ~(screen->format->Rmask|screen->format->Gmask|screen->format->Bmask)  // the rest is alpha
+  );
+  if (!surface->surface) {
+      std::cerr << "Failed to create soft surface: " << SDL_GetError() << std::endl;
+  }
+  std::cout << "softSurface created: " << surface->pixels << " " << surface->surface->pixels << std::endl;
+  return surface;
 }
 
 void Platform::makeOpaque(SDL_Surface *s, bool opaque) {

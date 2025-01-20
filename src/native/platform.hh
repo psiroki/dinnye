@@ -12,6 +12,29 @@
 #undef USE_GAME_CONTROLLER
 #endif
 
+struct SoftSurface {
+  /// Pointer to the pixel data. Always valid.
+  uint32_t *pixels;
+  /// Word pitch, not byte pitch, can be used as-is with pixels
+  int pitch;
+  int width;
+  int height;
+  SDL_Surface *surface;
+
+  void free();
+
+  inline SoftSurface(): pixels(nullptr), surface(nullptr), pitch(0), width(0), height(0) {}
+  inline SoftSurface(int width, int height):
+      pixels(new uint32_t[width*height]),
+      pitch(width),
+      width(width),
+      height(height),
+      surface(nullptr) {}
+  inline ~SoftSurface() {
+    free();
+  }
+};
+
 class Platform {
   SDL_Surface *screen;
   SDL_Surface *rotated;
@@ -23,6 +46,9 @@ class Platform {
   SDL_Window* window;
   SDL_Renderer* renderer;
   SDL_Texture* texture;        // Texture to display the final surface
+#else
+  bool useSoftBackbuffer;
+  uint32_t *softPixels;
 #endif
 public:
   Platform();
@@ -30,8 +56,14 @@ public:
   SDL_Surface* displayFormat(SDL_Surface *src);
   SDL_Surface* displayFormatAndFree(SDL_Surface *src);
   SDL_Surface* createSurface(int width, int height);
+  SoftSurface* createSoftSurface(int width, int height);
   void makeOpaque(SDL_Surface *s, bool opaque = true);
   void present();
+#ifndef USE_SDL2
+  void setSoftBackbufferEnabled(bool val) {
+    useSoftBackbuffer = val;
+  }
+#endif
 };
 
 inline SDL_Rect makeRect(int x, int y, int w = 0, int h = 0) {

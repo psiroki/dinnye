@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "platform.hh"
+#include "util.hh"
 #include "../common/sim.hh"
 
 template <typename T> T min(T a, T b) {
@@ -128,13 +129,20 @@ class FruitRenderer {
   uint32_t menuButtonAlpha;
   uint32_t menuButtonHover;
   Placement menuButtonPlacement;
+  Timestamp performance;
+  uint64_t performanceCounts[16];
+  int performanceSnapshots[16];
+  int perfIndex;
 
   /// Renders the topmost layer for the game and lost state
   void renderCommonOverlay(PixelBuffer pb);
   void layoutCommonOverlay();
+  void addTime();
 public:
   FruitRenderer(SDL_Surface *target);
   ~FruitRenderer();
+
+  void dumpTimes();
 
   inline const Placement& getMenuButtonPlacement() const {
     return menuButtonPlacement;

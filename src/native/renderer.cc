@@ -10,6 +10,8 @@
 #define USE_QUICKBLIT
 #endif
 
+#define ENABLE_PROFILING 0
+
 extern Platform platform;
 
 const Scalar pi = Scalar(float(M_PI));
@@ -477,7 +479,24 @@ void FruitRenderer::layoutCommonOverlay() {
   menuButtonPlacement.y = target->h - marginY - menuButtonPlacement.h;
 }
 
-FruitRenderer::FruitRenderer(SDL_Surface *target): target(target), numSpheres(0), highscoreCache("High score"), fps(-1), menuButtonAlpha(0), menuButtonHover(0) {
+void FruitRenderer::addTime() {
+#if ENABLE_PROFILING
+  int i = (perfIndex++) & 15;
+  performanceCounts[i] += performance.elapsedNanos(true);
+  ++performanceSnapshots[i];
+#endif
+}
+
+FruitRenderer::FruitRenderer(SDL_Surface *target):
+    target(target),
+    numSpheres(0),
+    highscoreCache("High score"),
+    fps(-1),
+    performanceCounts { },
+    performanceSnapshots { },
+    perfIndex(0),
+    menuButtonAlpha(0),
+    menuButtonHover(0) {
   ShadedSphere::initTables();
 
   numTextures = (sizeof(imageNames) / sizeof(*imageNames)) - 1;
@@ -625,6 +644,25 @@ FruitRenderer::~FruitRenderer() {
   delete[] shading;
   delete[] sphereDefs;
   sphereDefs = nullptr;
+}
+
+void FruitRenderer::dumpTimes() {
+#if ENABLE_PROFILING
+  int maxSnapshots = 0;
+  uint64_t sum = 0;
+  for (int i = 0; i < 16; ++i) {
+    if (performanceSnapshots[i]) {
+      std::cout << "Perf #" << i << ": " << performanceCounts[i] * 1.0e-6 << " " <<
+          performanceCounts[i] * 1.0e-6 / performanceSnapshots[i] << std::endl;
+      if (performanceSnapshots[i] > maxSnapshots) maxSnapshots = performanceSnapshots[i];
+      sum += performanceCounts[i];
+    }
+  }
+  if (maxSnapshots) {
+    std::cout << "Perf sum: " << sum * 1.0e-6 << " " <<
+        sum * 1.0e-6 / maxSnapshots << std::endl;
+  }
+#endif
 }
 
 SDL_Surface* FruitRenderer::renderText(const char *str, uint32_t color) {
@@ -919,6 +957,8 @@ void FruitRenderer::renderSelection(PixelBuffer pb, int left, int top, int right
 }
 
 void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int outlierIndex, uint32_t frameIndex, Scalar frameFraction, bool skipScore) {
+  performance.reset();
+  perfIndex = 0;
   Fruit *fruits = sim.getFruits();
   Scalar remainingFraction = Scalar(1) - frameFraction;
   if (!skipScore) {
@@ -932,6 +972,8 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       SDL_BlitSurface(scoreText, nullptr, target, &scorePos);
     }
   }
+  // 0..
+  addTime();
   // Render selection
   if (selection >= 0 && selection < numRadii) {
     Placement &def(planetDefs[selection].placement);
@@ -951,6 +993,8 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
     renderSelection(pb, left, top, right, bottom, 2);
     targetLock.unlock();
   }
+  // 1..
+  addTime();
 
   int bottom = target->h;
   int top = bottom - sizeY * zoom;
@@ -972,6 +1016,8 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       p += lock.pb.pitch;
     }
   }
+  // 2..
+  addTime();
 
 #ifdef USE_QUICKBLIT
   SurfaceLocker sl(target);
@@ -999,8 +1045,9 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       memset(&dst, 0, sizeof(dst));
     }
 #endif
-    int screenX = f.pos.x * zoom - radius + offsetX;
-    int screenY = f.pos.y * zoom - radius + top;
+    Point interpolatedPos = f.pos + (f.lastPos - f.pos) * remainingFraction;
+    int screenX = interpolatedPos.x * zoom - radius + offsetX;
+    int screenY = interpolatedPos.y * zoom - radius + top;
     if (screenY < -s->h) {
       if (screenY < -32768) screenY = -32768;
       above[numAbove++] = static_cast<uint32_t>(screenY) << 16 | (screenX & 0xFFFF);
@@ -1017,6 +1064,8 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
 #ifdef USE_QUICKBLIT
   sl.unlock();
 #endif
+  // 3..
+  addTime();
 
   if (numAbove) {
     // Draw arrows (triangles) for objects above the screen
@@ -1038,6 +1087,8 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
       }
     }
   }
+  // 4..
+  addTime();
 
   SurfaceLocker locker(target);
   renderCommonOverlay(locker.pb);
@@ -1055,8 +1106,13 @@ void FruitRenderer::renderFruits(FruitSim &sim, int count, int selection, int ou
     }
   }
 
+  // 5..
+  addTime();
+
   for (int i = count; i < numSpheres; ++i) {
     spheres[i + numRadii].release();
   }
   numSpheres = count;
+  // 6..
+  addTime();
 }

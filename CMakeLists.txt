@@ -104,6 +104,11 @@ else()
   add_definitions(-DDESKTOP)
 endif()
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)$")
+    add_compile_options(-funsafe-math-optimizations -mfpu=neon -fopt-info-vec-optimized)
+    message(STATUS "ARM Neon vector optimizations turned on")
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 endif()

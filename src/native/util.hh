@@ -72,6 +72,7 @@ class Timestamp {
   timespec time;
   static float secondsDiff(const timespec &a, const timespec &b);
   static uint64_t microsDiff(const timespec &a, const timespec &b);
+  static uint64_t nanosDiff(const timespec &a, const timespec &b);
 public:
   Timestamp();
   inline Timestamp(const Timestamp &other): time(other.time) { }
@@ -79,6 +80,8 @@ public:
   void reset();
   /// Sets the Timestamp object to the current time plus the given seconds
   void resetWithDelta(float deltaSeconds);
+  /// Calculates the elapsed nanoseconds now since the time the Timestamp object holds
+  uint64_t elapsedNanos(bool reset = false);
   /// Calculates the elapsed microseconds now since the time the Timestamp object holds
   uint64_t elapsedMicros(bool reset = false);
   float elapsedSeconds(bool reset = false);

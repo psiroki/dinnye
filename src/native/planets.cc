@@ -239,6 +239,7 @@ class Planets: private GameSettings {
   SDL_Surface *screen;
   SDL_Surface *background;
   SDL_Surface *snapshot;
+  AutoDelete<SoftSurface> softBackground;
   Mixer mixer;
   SoundBuffer allSounds;
   SoundBufferView pop;
@@ -276,6 +277,7 @@ class Planets: private GameSettings {
   SectionTime gameFrame;
   SectionTime blurTime;
   SectionTime renderTime;
+  SectionTime drawTime;
   SectionTime simTime;
   const char * const configFilePath;
 
@@ -317,6 +319,7 @@ public:
       gameFrame("gameFrame"),
       blurTime("blur"),
       renderTime("render"),
+      drawTime("draw"),
       simTime("sim"),
       flipTime("flip"),
       eventTime("events"),
@@ -703,12 +706,13 @@ void Planets::simulate() {
 
 void Planets::renderGame(GameState nextState, Scalar frameFraction) {
   renderTime.start();
-  Timestamp renderStart;
   SDL_BlitSurface(background, nullptr, screen, nullptr);
 
+  drawTime.start();
   Fruit *fruits = sim.getFruits();
   int count = sim.getNumFruits();
   renderer->renderFruits(sim, count + 1, next.radIndex, outlierIndex, simulationFrame, frameFraction, nextState == GameState::lost);
+  drawTime.end();
 
   renderTime.end();
 }
@@ -726,7 +730,7 @@ void Planets::start() {
 #elif defined(MIYOOA30)
   screen = platform.initSDL(0, 0, 3, false);
 #elif defined(MIYOO)
-  screen = platform.initSDL(0, 0, 2, false);
+  screen = platform.initSDL(0, 0, 2);
 #elif defined(DESKTOP)
   screen = platform.initSDL(640, 480, 0, false, true);
 #else
@@ -806,7 +810,8 @@ void Planets::start() {
     SDL_Quit();
   }
   platform.makeOpaque(background);
-  SDL_Surface *backgroundScreen = platform.createSurface(screen->w, screen->h);
+  softBackground = platform.createSoftSurface(screen->w, screen->h);
+  SDL_Surface *backgroundScreen = softBackground->surface;
   if (!backgroundScreen) {
     std::cerr << "Couldn't allocate memory for background" << std::endl;
     SDL_Quit();
@@ -821,13 +826,14 @@ void Planets::start() {
   SDL_FreeSurface(background);
   background = backgroundScreen;
   platform.makeOpaque(background);
+  if (background == softBackground->surface) {
+    std::cout << "Background is a soft surface" << std::endl;
+  }
 
   renderer = new FruitRenderer(screen);
   menu = new Menu(*renderer, *this);
   renderer->setLayout(zoom, offsetX, sim);
   renderer->renderBackground(background);
-  background = platform.displayFormatAndFree(background);
-  platform.makeOpaque(background);
 
   Fruit *fruits;
 
@@ -955,6 +961,7 @@ void Planets::start() {
   std::cout << gameFrame << std::endl;
   std::cout << blurTime << std::endl;
   std::cout << renderTime << std::endl;
+  std::cout << drawTime << std::endl;
   std::cout << simTime << std::endl;
   std::cout << eventTime << std::endl;
   std::cout << flipTime << std::endl;
@@ -968,6 +975,8 @@ void Planets::start() {
   if (numHighscores) {
     dumpHighscore();
   }
+
+  renderer->dumpTimes();
 
 #ifdef BITTBOY
   std::cout << std::endl;
@@ -992,7 +1001,7 @@ void Planets::start() {
 
   music->stopThread();
 
-  SDL_FreeSurface(background);
+  softBackground = nullptr;
   SDL_FreeSurface(snapshot);
 
   saveState();
