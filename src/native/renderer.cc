@@ -55,6 +55,48 @@ inline uint32_t ablend(uint32_t col, uint8_t alpha) {
 		((v >> 8) & 0xffu);
 }
 
+void halfBlit(PixelBuffer src, PixelBuffer dst, int x, int y) {
+  int w = src.width >> 1;
+  int h = src.height >> 1;
+  uint32_t *s = src.pixels;
+  if (x < 0) {
+    w += x;
+    s -= x;
+    x = 0;
+  }
+  if (y < 0) {
+    h += y;
+    s -= y * src.pitch;
+    y = 0;
+  }
+  if (x + w > dst.width) {
+    w = dst.width - x;
+  }
+  if (y + h > dst.height) {
+    h = dst.height - y;
+  }
+  if (w <= 0 || h <= 0) return;
+  if (x < 0 || y < 0) {
+    return;
+  }
+  uint32_t *d = dst.pixels + x + y * dst.pitch;
+  for (int py = 0; py < h; ++py) {
+    uint32_t *dl = d;
+    uint32_t *sl = s;
+    for (int px = 0; px < w; ++px) {
+      uint32_t col = *sl;
+      sl += 2;
+      if (col) {
+        uint32_t a = col >> 24;
+        *dl = ablend(col, a) + ablend(*dl, 255-a) | 0xFF000000u;
+      }
+      ++dl;
+    }
+    d += dst.pitch;
+    s += 2*src.pitch;
+  }
+}
+
 void renderSphereLightmap(PixelBuffer &pb) {
   int cx = pb.width >> 1;
   int cy = pb.height >> 1;
@@ -700,8 +742,16 @@ void FruitRenderer::renderTitle(int taglineSelection, int fade) {
     p += lock.pb.pitch;
     alpha += increment;
   }
+  if (target->w < 320) {
+    SurfaceLocker titleLock(title);
+    halfBlit(titleLock.pb.cropped(caption.x, caption.y, caption.x + caption.w, caption.y + caption.h),
+        lock.pb, caption.x + (caption.w >> 3), caption.y + (caption.h >> 1));
+    taglineTarget.y -= caption.h >> 4;
+  }
   lock.unlock();
-  SDL_BlitSurface(title, &caption, target, &captionTarget);
+  if (target->w >= 320) {
+    SDL_BlitSurface(title, &caption, target, &captionTarget);
+  }
   SDL_BlitSurface(title, &tagline, target, &taglineTarget);
 }
 
@@ -931,7 +981,7 @@ void quickBlit(PixelBuffer src, PixelBuffer dst, int x, int y) {
     uint32_t *sl = s;
     for (int px = 0; px < w; ++px) {
       uint32_t col = *sl++;
-     if (col) *dl = col;
+      if (col) *dl = col;
       ++dl;
     }
     d += dst.pitch;
