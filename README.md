@@ -1,5 +1,7 @@
 # Dinnye
 
+![Screenshot](screenshot.jpg)
+
 Dinnye is a fruit merge game designed to run efficiently on very weak hardware, such as devices using the F1C100s SoC. This performance is achieved through the use of fixed-point math, including a highly effective [fixed-point reciprocal square root approximation](docs/rsqrt.md).
 
 In Hungarian, *Dinnye* means watermelon — I wanted to port the Suka Game to weaker hardware. The game has since evolved, and now players merge planets rather than fruits.
